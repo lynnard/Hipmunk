@@ -179,7 +179,9 @@ Library
 
   if flag(system-chipmunk)
     Include-Dirs:
-        /usr/include/chipmunk
+        /Applications/Cocos/frameworks/cocos2d-x-3.9/external/chipmunk/include/chipmunk
+    Extra-lib-dirs:
+        /Applications/Cocos/frameworks/cocos2d-x-3.9/external/chipmunk/prebuilt/mac
     Extra-libraries:
         chipmunk
   else
@@ -222,7 +224,7 @@ Library
     Build-Depends: base >= 3 && < 5,
                    array >= 0.1 && < 0.6,
                    containers >= 0.1 && < 0.6,
-                   transformers >= 0.2 && < 0.5,
+                   transformers >= 0.2 && < 0.6,
                    StateVar >= 1.0 && < 1.2
   else
     Build-Depends: base >= 2 && < 3,
