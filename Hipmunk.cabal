@@ -225,7 +225,8 @@ Library
                    array >= 0.1 && < 0.6,
                    containers >= 0.1 && < 0.6,
                    transformers >= 0.2 && < 0.6,
-                   StateVar >= 1.0 && < 1.2
+                   StateVar >= 1.0 && < 1.2,
+                   linear
   else
     Build-Depends: base >= 2 && < 3,
                    transformers >= 0.2 && < 0.5,

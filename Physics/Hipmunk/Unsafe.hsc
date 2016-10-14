@@ -29,6 +29,8 @@ import Foreign hiding (rotate, new)
 import Foreign.C
 #include "wrapper.h"
 
+import Linear.Affine
+
 import Physics.Hipmunk.Common
 import Physics.Hipmunk.Internal
 import Physics.Hipmunk.Shape
@@ -41,23 +43,23 @@ import Physics.Hipmunk.Shape
 --   or a polygon.  Note also that these errors /are not/
 --   /checked/, meaning /they will probably crash Chipmunk/.
 unsafeShapeRedefine :: Shape -> ShapeType -> Position -> IO ()
-unsafeShapeRedefine (S shape _) (Circle r) off =
+unsafeShapeRedefine (S shape _) (Circle r) (P off) =
   withForeignPtr shape $ \shape_ptr ->
   with off $ \off_ptr -> do
     cpCircleShapeSetRadius shape_ptr r
     wrCircleShapeSetOffset shape_ptr off_ptr
 
-unsafeShapeRedefine (S shape _) (LineSegment p1 p2 r) off =
+unsafeShapeRedefine (S shape _) (LineSegment (P p1) (P p2) r) (P off) =
   withForeignPtr shape $ \shape_ptr ->
   with (p1+off) $ \p1off_ptr ->
   with (p2+off) $ \p2off_ptr -> do
     wrSegmentShapeSetEndpoints shape_ptr p1off_ptr p2off_ptr
     cpSegmentShapeSetRadius shape_ptr r
 
-unsafeShapeRedefine (S shape _) (Polygon verts) off =
+unsafeShapeRedefine (S shape _) (Polygon verts) (P off) =
   withForeignPtr shape $ \shape_ptr ->
   with off $ \off_ptr ->
-  withArrayLen verts $ \verts_len verts_ptr -> do
+  withArrayLen (unP <$> verts) $ \verts_len verts_ptr -> do
     let verts_len' = fromIntegral verts_len
     wrPolyShapeSetVerts shape_ptr verts_len' verts_ptr off_ptr
 

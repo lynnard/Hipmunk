@@ -70,9 +70,13 @@ import Foreign hiding (rotate, new)
 import Foreign.C
 #include "wrapper.h"
 
+import Linear
+import Linear.Affine (Point(..))
+
 import Physics.Hipmunk.Common
 import Physics.Hipmunk.Internal
 import Physics.Hipmunk.Body (Mass, Moment)
+
 
 -- | There are three types of shapes that can be attached
 --   to bodies:
@@ -103,7 +107,7 @@ data ShapeType =
 --   add the shape to a space otherwise it won't generate
 --   collisions.
 newShape :: Body -> ShapeType -> Position -> IO Shape
-newShape body_@(B b) (Circle r) off =
+newShape body_@(B b) (Circle r) (P off) =
   withForeignPtr b $ \b_ptr ->
   with off $ \off_ptr ->
   mallocForeignPtrBytes #{size cpCircleShape} >>= \shape ->
@@ -111,7 +115,7 @@ newShape body_@(B b) (Circle r) off =
     wrCircleShapeInit shape_ptr b_ptr off_ptr r
     return (S shape body_)
 
-newShape body_@(B b) (LineSegment p1 p2 r) off =
+newShape body_@(B b) (LineSegment (P p1) (P p2) r) (P off) =
   withForeignPtr b $ \b_ptr ->
   with (p1+off) $ \p1off_ptr ->
   with (p2+off) $ \p2off_ptr ->
@@ -120,10 +124,10 @@ newShape body_@(B b) (LineSegment p1 p2 r) off =
     wrSegmentShapeInit shape_ptr b_ptr p1off_ptr p2off_ptr r
     return (S shape body_)
 
-newShape body_@(B b) (Polygon verts) off =
+newShape body_@(B b) (Polygon verts) (P off) =
   withForeignPtr b $ \b_ptr ->
   with off $ \off_ptr ->
-  withArrayLen verts $ \verts_len verts_ptr ->
+  withArrayLen (unP <$> verts) $ \verts_len verts_ptr ->
   mallocForeignPtrBytes #{size cpPolyShape} >>= \shape ->
   withForeignPtr shape $ \shape_ptr -> do
     let verts_len' = fromIntegral verts_len
@@ -264,8 +268,8 @@ momentForCircle m (ri,ro) off = (m/2)*(ri*ri + ro*ro) + m*(off `dot` off)
 --   segment of mass @m@ going from point @p1@ to point @p2@.
 momentForSegment :: Mass -> Position -> Position -> Moment
 momentForSegment m p1 p2 =
-    let len' = len (p2 - p1)
-        offset = scale (p1 + p2) (recip 2)
+    let len' = norm (p2 - p1)
+        offset = (p1 + p2) ^/ 2
     in m * len' * len' / 12  +  m * offset `dot` offset
 -- We recoded the C function to avoid FFI and unsafePerformIO
 -- on this simple function.
@@ -277,15 +281,16 @@ momentForSegment m p1 p2 =
 --   to 'Polygon' (and the same restrictions for the vertices
 --   apply as well).
 momentForPoly :: Mass -> [Position] -> Position -> Moment
-momentForPoly m verts off = (m*sum1)/(6*sum2)
+momentForPoly m vts (P off) = (m*sum1)/(6*sum2)
   where
+    verts = unP <$> vts
     verts' = if off /= 0 then map (+off) verts else verts
     (sum1,sum2) = calc (pairs (,) verts') 0 0
 
     calc a b c | a `seq` b `seq` c `seq` False = undefined
     calc []           acc1 acc2 = (acc1, acc2)
     calc ((v1,v2):vs) acc1 acc2 =
-      let a = v2 `cross` v1
+      let a = v2 `crossZ` v1
           b = v1 `dot` v1 + v1 `dot` v2 + v2 `dot` v2
       in calc vs (acc1 + a*b) (acc2 + a)
 -- We recoded the C function to avoid FFI, unsafePerformIO
@@ -300,7 +305,7 @@ pairs f l = zipWith f l (tail $ cycle l)
 --   in position @p@ (in world's coordinates) lies within the
 --   shape @shape@.
 shapePointQuery :: Shape -> Position -> IO Bool
-shapePointQuery (S shape _) p =
+shapePointQuery (S shape _) (P p) =
   withForeignPtr shape $ \shape_ptr ->
   with p $ \p_ptr -> do
     i <- wrShapePointQuery shape_ptr p_ptr
@@ -316,7 +321,7 @@ foreign import ccall unsafe "wrapper.h"
 --   (p2 - p1) \`scale\` t@ with normal @n@.
 shapeSegmentQuery :: Shape -> Position -> Position
                   -> IO (Maybe (CpFloat, Vector))
-shapeSegmentQuery (S shape _) p1 p2 =
+shapeSegmentQuery (S shape _) (P p1) (P p2) =
     withForeignPtr shape $ \shape_ptr ->
     with p1 $ \p1_ptr ->
     with p2 $ \p2_ptr ->
@@ -357,7 +362,7 @@ type Segment = (Position, Position)
 -- | /O(n)/. @isClockwise verts@ is @True@ iff @verts@ form
 --   a clockwise polygon.
 isClockwise :: [Position] -> Bool
-isClockwise = (<= 0) . foldl' (+) 0 . pairs cross
+isClockwise = (<= 0) . foldl' (+) 0 . pairs crossZ . fmap unP
 
 -- | @isLeft (p1,p2) vert@ is
 --
@@ -367,29 +372,29 @@ isClockwise = (<= 0) . foldl' (+) 0 . pairs cross
 --
 --    * @GT@ otherwise.
 isLeft :: (Position, Position) -> Position -> Ordering
-isLeft (p1,p2) vert = compare 0 $ (p1 - vert) `cross` (p2 - vert)
+isLeft (P p1,P p2) (P vert) = compare 0 $ (p1 - vert) `crossZ` (p2 - vert)
 
 -- | /O(n)/. @isConvex verts@ is @True@ iff @vers@ form a convex
 --   polygon.
 isConvex :: [Position] -> Bool
-isConvex = foldl1 (==) . map (0 <) . filter (0 /=) . pairs cross . pairs (-)
+isConvex = foldl1 (==) . map (0 <) . filter (0 /=) . pairs crossZ . pairs (-) . fmap unP
 -- From http://apocalisp.wordpress.com/category/programming/haskell/page/2/
 
 -- | /O(1)/. @intersects seg1 seg2@ is the intersection between
 --   the two segments @seg1@ and @seg2@. See 'Intersection'.
 intersects :: Segment -> Segment -> Intersection
-intersects (a0,a1) (b0,b1) =
+intersects (P a0,P a1) (P b0,P b1) =
     let u                = a1 - a0
-        v@(Vector vx vy) = b1 - b0
-        w@(Vector wx wy) = a0 - b0
-        d = u `cross` v
+        v@(V2 vx vy) = b1 - b0
+        w@(V2 wx wy) = a0 - b0
+        d = u `crossZ` v
         parallel = d .==. 0
 
         -- Parallel case
-        collinear = all (.==. 0) [u `cross` w, v `cross` w]
+        collinear = all (.==. 0) [u `crossZ` w, v `crossZ` w]
         a_is_point = u `dot` u .==. 0
         b_is_point = v `dot` v .==. 0
-        (Vector w2x w2y) = a1 - b0
+        (V2 w2x w2y) = a1 - b0
         (a_in_b, a_in_b') = if vx .==. 0
                              then swap (wy/vy, w2y/vy)
                              else swap (wx/vx, w2x/vx)
@@ -397,8 +402,8 @@ intersects (a0,a1) (b0,b1) =
                                | otherwise = (y,x)
 
         -- Non-parallel case
-        sI = v `cross` w / d
-        tI = u `cross` w / d
+        sI = v `crossZ` w / d
+        tI = u `crossZ` w / d
 
         -- Auxiliary functions
         inSegment p (c0,c1)
@@ -406,7 +411,7 @@ intersects (a0,a1) (b0,b1) =
             | otherwise = test (gx p) (gx c0, gx c1)
             where
               vertical = gx c0 .==. gx c1
-              (gx, gy) = (\(Vector x _) -> x, \(Vector _ y) -> y)
+              (gx, gy) = (\(V2 x _) -> x, \(V2 _ y) -> y)
               test q (d0,d1) = any (inside q) [(d0,d1), (d1,d0)]
         inside n (l,r) = l <= n && n <= r
 
@@ -422,26 +427,26 @@ intersects (a0,a1) (b0,b1) =
                        max a_in_b 0, min a_in_b' 1) of
                    (True, _, _) -> IntNowhere
                    (_, i0, i1)
-                       | i0 .==. i1 -> IntPoint p0
-                       | otherwise  -> IntSegmt (p0,p1)
-                       where p0 = b0 + v `scale` i0
-                             p1 = b0 + v `scale` i1
+                       | i0 .==. i1 -> IntPoint (P p0)
+                       | otherwise  -> IntSegmt (P p0,P p1)
+                       where p0 = b0 + v ^* i0
+                             p1 = b0 + v ^* i1
 
              (_, True, True) ->
                  -- Both are points
-                 if len (b0-a0) .==. 0
-                 then IntPoint a0 else IntNowhere
+                 if norm (b0-a0) .==. 0
+                 then IntPoint (P a0) else IntNowhere
 
              _ ->
                  -- One is a point, another is a segment
-                 let (point,segment)
+                 let (pt,segment)
                          | a_is_point = (a0, (b0,b1))
                          | otherwise  = (b0, (a0,a1))
-                 in if inSegment point segment
-                    then IntPoint point else IntNowhere
+                 in if inSegment pt segment
+                    then IntPoint (P pt) else IntNowhere
 
        else if all (\x -> inside x (0,1)) [sI, tI]
-            then IntPoint (a0 + u `scale` sI) else IntNowhere
+            then IntPoint (P (a0 + u ^* sI)) else IntNowhere
 
 -- | A possible intersection between two segments.
 data Intersection = IntNowhere         -- ^ Don't intercept.
@@ -460,14 +465,14 @@ data Intersection = IntNowhere         -- ^ Don't intercept.
 polyReduce :: Distance -> [Position] -> [Position]
 polyReduce delta = go
     where
-      go (p1:p2:ps) | len (p2-p1) < delta = go (p1:ps)
-                    | otherwise           = p1 : go (p2:ps)
+      go (p1:p2:ps) | norm (p2-p1) < delta = go (p1:ps)
+                    | otherwise            = p1 : go (p2:ps)
       go other = other
 
 -- | /O(n)/. @polyCenter verts@ is the position in the center
 --   of the polygon formed by @verts@.
 polyCenter :: [Position] -> Position
-polyCenter verts = foldl' (+) 0 verts `scale` s
+polyCenter verts = foldl' (+) 0 verts ^* s
     where s = recip $ toEnum $ length verts
 
 

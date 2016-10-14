@@ -68,7 +68,6 @@ module Physics.Hipmunk.Callbacks
     )
     where
 
-import Control.Applicative
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader
 import Data.IORef
@@ -361,7 +360,7 @@ postStep e cb = do
 -- in 'Callback' monad.  It is therefore unsafe and should not be
 -- used unless you really know what you are doing.
 unsafePostStep :: Entity a => Space -> a -> IO () -> IO ()
-unsafePostStep (P sp _ callbacks) e cb = do
+unsafePostStep (SP sp _ callbacks) e cb = do
   let f _ _ _ = cb -- discard arguments that we don't need
   cb_ptr <- makeChipmunkPostStepCB f
   withForeignPtr sp $ \sp_ptr ->
@@ -452,7 +451,7 @@ foreign import ccall "wrapper"
 -- | Internal.  Create the 'FunPtr's and give them to C land.
 addHandler :: Space -> (SpacePtr -> HandlerAdder)
            -> CollisionHandler -> IO HandlerFunPtrs
-addHandler spce@(P sp _ _) handlerAdder handler = do
+addHandler spce@(SP sp _ _) handlerAdder handler = do
   beginCB     <- adaptCallback spce $ asCInt $ beginHandler handler
   preSolveCB  <- adaptCallback spce $ asCInt $ preSolveHandler handler
   postSolveCB <- adaptCallback spce $ postSolveHandler handler
@@ -475,7 +474,7 @@ type HandlerAdder =  ChipmunkCBPtr CInt
 -- collision types. The default is @Handler Nothing Nothing
 -- Nothing Nothing@.
 setDefaultCollisionHandler :: Space -> CollisionHandler -> IO ()
-setDefaultCollisionHandler spce@(P _ _ callbacks) handler = do
+setDefaultCollisionHandler spce@(SP _ _ callbacks) handler = do
   ptrs <- addHandler spce cpSpaceSetDefaultCollisionHandler handler
   cbs <- readIORef callbacks
   freeHandlerFunPtrs (cbsDefault cbs)
@@ -495,7 +494,7 @@ foreign import ccall unsafe "wrapper.h"
 -- behaviour.  A good rule of thumb is to always use @cta <=
 -- ctb@, although this is not necessary.
 addCollisionHandler :: Space -> CollisionType -> CollisionType -> CollisionHandler -> IO ()
-addCollisionHandler spce@(P _ _ callbacks) cta ctb handler = do
+addCollisionHandler spce@(SP _ _ callbacks) cta ctb handler = do
   -- Add the new handler, overriding anything that was already there.
   let handlerAdder p = cpSpaceAddCollisionHandler p cta ctb
   ptrs <- addHandler spce handlerAdder handler
@@ -531,7 +530,7 @@ foreign import ccall unsafe "wrapper.h"
 -- Although pointless, it is harmless to remove a callback that
 -- was not added.
 removeCollisionHandler :: Space -> CollisionType -> CollisionType -> IO ()
-removeCollisionHandler (P sp _ callbacks) cta ctb = do
+removeCollisionHandler (SP sp _ callbacks) cta ctb = do
   cbs <- readIORef callbacks
   let handlers = cbsHandlers cbs
       (old,handlers') = M.updateLookupWithKey (\_ _ -> Nothing) (cta,ctb) handlers

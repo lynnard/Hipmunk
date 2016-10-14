@@ -79,6 +79,8 @@ import Foreign.ForeignPtr.Unsafe (unsafeForeignPtrToPtr)
 import Foreign.C.Types (CInt(..))
 #include "wrapper.h"
 
+import Linear.Affine (Point(..))
+
 import Physics.Hipmunk.Common
 import Physics.Hipmunk.Internal
 import Physics.Hipmunk.Shape
@@ -131,7 +133,7 @@ newSpace =
     let n = nullFunPtr
     entities  <- newIORef M.empty
     callbacks <- newIORef $ CBs (n,n,n,n) M.empty []
-    return (P sp entities callbacks)
+    return (SP sp entities callbacks)
 
 foreign import ccall unsafe "wrapper.h"
     cpSpaceInit :: SpacePtr -> IO ()
@@ -142,7 +144,7 @@ foreign import ccall unsafe "wrapper.h"
 --   not be used (passing @sp@ to any other function,
 --   including 'freeSpace', results in undefined behavior).
 freeSpace :: Space -> IO ()
-freeSpace (P sp entities callbacks) = do
+freeSpace (SP sp entities callbacks) = do
   -- We could use a finalizer to call cpSpaceDestroy,
   -- but it is easier to just destroy it here.  The user
   -- needs to call 'freeSpace' anyways.
@@ -184,7 +186,7 @@ spaceAddHelper :: (a -> ForeignPtr b)
                -> (a -> Retrievable)
                -> (Space -> a -> IO ())
 spaceAddHelper get_ add toRetrievable =
-    \(P sp entities _) new_c ->
+    \(SP sp entities _) new_c ->
         let new  = get_ new_c
             key  = unsafeForeignPtrToPtr $ castForeignPtr new
             val  = toRetrievable new_c
@@ -197,7 +199,7 @@ spaceRemoveHelper :: (a -> ForeignPtr b)
                   -> (SpacePtr -> Ptr b -> IO ())
                   -> (Space -> a -> IO ())
 spaceRemoveHelper get_ remove =
-    \(P sp entities _) old_c -> do
+    \(SP sp entities _) old_c -> do
       let old  = get_ old_c
           key  = unsafeForeignPtrToPtr $ castForeignPtr old
       modifyIORefStrict entities (M.delete key)
@@ -268,7 +270,7 @@ foreign import ccall {- !!! -} safe {- !!! -} "wrapper.h"
 --   (default is 10).
 type Iterations = CInt
 iterations :: Space -> StateVar Iterations
-iterations (P sp _ _) = makeStateVar getter setter
+iterations (SP sp _ _) = makeStateVar getter setter
     where
       getter = withForeignPtr sp #{peek cpSpace, iterations}
       setter = withForeignPtr sp . flip #{poke cpSpace, iterations}
@@ -276,7 +278,7 @@ iterations (P sp _ _) = makeStateVar getter setter
 -- | The gravity applied to the system. (default is 0)
 type Gravity = Vector
 gravity :: Space -> StateVar Gravity
-gravity (P sp _ _) = makeStateVar getter setter
+gravity (SP sp _ _) = makeStateVar getter setter
     where
       getter = withForeignPtr sp #{peek cpSpace, gravity}
       setter = withForeignPtr sp . flip #{poke cpSpace, gravity}
@@ -284,7 +286,7 @@ gravity (P sp _ _) = makeStateVar getter setter
 -- | The amount of viscous damping applied to the system.
 --   (default is 1)
 damping :: Space -> StateVar Damping
-damping (P sp _ _) = makeStateVar getter setter
+damping (SP sp _ _) = makeStateVar getter setter
     where
       getter = withForeignPtr sp #{peek cpSpace, damping}
       setter = withForeignPtr sp . flip #{poke cpSpace, damping}
@@ -293,7 +295,7 @@ damping (P sp _ _) = makeStateVar getter setter
 --   every time 'step' is called.
 type TimeStamp = CInt
 timeStamp :: Space -> GettableStateVar TimeStamp
-timeStamp (P sp _ _) = makeGettableStateVar $
+timeStamp (SP sp _ _) = makeGettableStateVar $
                        withForeignPtr sp #{peek cpSpace, stamp}
 
 -- | Amount of encouraged penetration between colliding shapes.
@@ -302,7 +304,7 @@ timeStamp (P sp _ _) = makeGettableStateVar $
 --   increase this number as much as possible without allowing visible amounts of overlap.
 type CollisionSlop = CpFloat
 collisionSlop :: Space -> StateVar CollisionSlop
-collisionSlop (P sp _ _) = makeStateVar getter setter
+collisionSlop (SP sp _ _) = makeStateVar getter setter
     where
       getter = withForeignPtr sp #{peek cpSpace, collisionSlop}
       setter = withForeignPtr sp . flip #{poke cpSpace, collisionSlop}
@@ -313,7 +315,7 @@ collisionSlop (P sp _ _) = makeStateVar getter setter
 --   Defaults to pow(1.0 - 0.1, 60.0) meaning that Chipmunk fixes 10% of overlap each frame at 60Hz.
 type CollisionBias = CpFloat
 collisionBias :: Space -> StateVar CollisionBias
-collisionBias (P sp _ _) = makeStateVar getter setter
+collisionBias (SP sp _ _) = makeStateVar getter setter
     where
       getter = withForeignPtr sp #{peek cpSpace, collisionBias}
       setter = withForeignPtr sp . flip #{poke cpSpace, collisionBias}
@@ -321,14 +323,14 @@ collisionBias (P sp _ _) = makeStateVar getter setter
 -- | Number of frames that contact information should persist.
 --   Defaults to 3. There is probably never a reason to change this value.
 collsionPersistence :: Space -> StateVar TimeStamp
-collsionPersistence (P sp _ _) = makeStateVar getter setter
+collsionPersistence (SP sp _ _) = makeStateVar getter setter
     where
       getter = withForeignPtr sp #{peek cpSpace, collisionPersistence}
       setter = withForeignPtr sp . flip #{poke cpSpace, collisionPersistence}
 
 -- | Switch the space to use a spatial has as it's spatial index.
 useSpatialHash :: Space -> CpFloat -> CInt -> IO ()
-useSpatialHash (P sp _ _) dim count =
+useSpatialHash (SP sp _ _) dim count =
     withForeignPtr sp $ \sp_ptr -> do
       cpSpaceUseSpatialHash sp_ptr dim count
 
@@ -338,7 +340,7 @@ foreign import ccall unsafe "wrapper.h"
 
 -- | Update the collision detection info for the static shapes in the space.
 reindexStatic :: Space -> IO ()
-reindexStatic (P sp _ _) =
+reindexStatic (SP sp _ _) =
     withForeignPtr sp cpSpaceReindexStatic
 
 foreign import ccall unsafe "wrapper.h"
@@ -365,7 +367,7 @@ foreign import ccall unsafe "wrapper.h"
 --   and only once, for each of the shapes described above
 --   (and never for those who aren't).
 spaceQuery :: Space -> Position -> Layers -> Group -> (Shape -> IO ()) -> IO ()
-spaceQuery spce@(P sp _ _) pos layers_ group_ callback =
+spaceQuery spce@(SP sp _ _) (P pos) layers_ group_ callback =
   withForeignPtr sp $ \sp_ptr ->
   bracket (makePointQueryFunc cb) freeHaskellFunPtr $ \cb_ptr ->
   with pos $ \pos_ptr ->
@@ -374,8 +376,8 @@ spaceQuery spce@(P sp _ _) pos layers_ group_ callback =
    cb shape_ptr _ = do maybeShape <- retrieveShape spce shape_ptr
                        case maybeShape of
                          Just s -> callback s
-                         _ -> fail $ "Physics.Hipmunk.Space: the impossible happened!" ++ 
-                                     " spaceQuery callback received a pointer expected to be a shape," ++ 
+                         _ -> fail $ "Physics.Hipmunk.Space: the impossible happened!" ++
+                                     " spaceQuery callback received a pointer expected to be a shape," ++
                                      " but got something else!"
 
 type PointQueryFunc = ShapePtr -> Ptr () -> IO ()
@@ -400,7 +402,7 @@ spaceQueryList spce pos layers_ group_ = do
 type BodyIteratorFunc = BodyPtr -> Ptr () -> IO ()
 type BodyIteratorFuncPtr = FunPtr BodyIteratorFunc
 spaceEachBody :: Space -> (Body -> IO ()) -> IO ()
-spaceEachBody spce@(P sp _ _) callback =
+spaceEachBody spce@(SP sp _ _) callback =
   withForeignPtr sp $ \sp_ptr ->
   bracket (makeBodyIteratorFunc cb) freeHaskellFunPtr $ \cb_ptr ->
     wrSpaceEachBody sp_ptr cb_ptr
@@ -408,8 +410,8 @@ spaceEachBody spce@(P sp _ _) callback =
     cb body_ptr _ = do maybeBody <- retrieveBody spce body_ptr
                        case maybeBody of
                          Just b -> callback b
-                         _ -> fail $ "Physics.Hipmunk.Space: the impossible happened!" ++ 
-                                     " spaceEachBody callback received a pointer expected to be a body," ++ 
+                         _ -> fail $ "Physics.Hipmunk.Space: the impossible happened!" ++
+                                     " spaceEachBody callback received a pointer expected to be a body," ++
                                      " but got something else!"
 
 foreign import ccall "wrapper"
@@ -421,16 +423,16 @@ foreign import ccall safe "wrapper.h"
 type ShapeIteratorFunc = ShapePtr -> Ptr () -> IO ()
 type ShapeIteratorFuncPtr = FunPtr ShapeIteratorFunc
 spaceEachShape :: Space -> (Shape -> IO ()) -> IO ()
-spaceEachShape spce@(P sp _ _) callback =
+spaceEachShape spce@(SP sp _ _) callback =
   withForeignPtr sp $ \sp_ptr ->
   bracket (makeShapeIteratorFunc cb) freeHaskellFunPtr $ \cb_ptr ->
     wrSpaceEachShape sp_ptr cb_ptr
-  where 
+  where
     cb shape_ptr _ = do maybeShape <- retrieveShape spce shape_ptr
                         case maybeShape of
                           Just s -> callback s
-                          _ -> fail $ "Physics.Hipmunk.Space: the impossible happened!" ++ 
-                                      " spaceEachShape callback received a pointer expected to be a shape," ++ 
+                          _ -> fail $ "Physics.Hipmunk.Space: the impossible happened!" ++
+                                      " spaceEachShape callback received a pointer expected to be a shape," ++
                                       " but got something else!"
 
 foreign import ccall "wrapper"
@@ -442,16 +444,16 @@ foreign import ccall safe "wrapper.h"
 type ConstraintIteratorFunc = ConstraintPtr -> Ptr () -> IO ()
 type ConstraintIteratorFuncPtr = FunPtr ConstraintIteratorFunc
 spaceEachConstraint :: Space -> (Constraint Unknown -> IO ()) -> IO ()
-spaceEachConstraint spce@(P sp _ _) callback =
+spaceEachConstraint spce@(SP sp _ _) callback =
   withForeignPtr sp $ \sp_ptr ->
   bracket (makeConstraintIteratorFunc cb) freeHaskellFunPtr $ \cb_ptr ->
     wrSpaceEachConstraint sp_ptr cb_ptr
-  where 
+  where
     cb constraint_ptr _ = do maybeConstraint <- retrieveConstraint spce constraint_ptr
                              case maybeConstraint of
                                Just c -> callback c
-                               _ -> fail $ "Physics.Hipmunk.Space: the impossible happened!" ++ 
-                                           " spaceEachConstraint callback received a pointer expected to be a constraint," ++ 
+                               _ -> fail $ "Physics.Hipmunk.Space: the impossible happened!" ++
+                                           " spaceEachConstraint callback received a pointer expected to be a constraint," ++
                                            " but got something else!"
 
 foreign import ccall "wrapper"
@@ -466,7 +468,7 @@ foreign import ccall safe "wrapper.h"
 --   the efficiency of contact persistence. Some tips may be
 --   found in <http://www.gaffer.org/game-physics/fix-your-timestep>.
 step :: Space -> Time -> IO ()
-step (P sp _ callbacks) dt = do
+step (SP sp _ callbacks) dt = do
   withForeignPtr sp $ \sp_ptr -> do
     cpSpaceStep sp_ptr dt
   cbs@(CBs {cbsPostStep = post}) <- readIORef callbacks

@@ -32,8 +32,10 @@ module Physics.Hipmunk.Internal
      Space(..),
      Callbacks(..),
      HandlerFunPtrs,
-     unP,
+     unSP,
      freeHandlerFunPtrs,
+
+     unP,
 
      Entity(..),
 
@@ -55,6 +57,8 @@ import Data.IORef
 import Data.Map (Map)
 import Foreign
 #include "wrapper.h"
+
+import Linear.Affine (Point(..))
 
 import Physics.Hipmunk.Common
 
@@ -142,11 +146,15 @@ class ConstraintType a where
   redef :: ConstraintPtr -> Body -> Body -> a -> IO ()
 
 
+unP :: Position -> Vector
+unP (P a) = a
+{-# INLINE unP #-}
+
 
 -- | A space is where the simulation really occurs. You add
 --   bodies, shapes and constraints to a space and then @step@ it
 --   to update it as whole.
-data Space = P !(ForeignPtr Space)
+data Space = SP !(ForeignPtr Space)
                !(IORef Entities)   -- Active and static entities
                !(IORef Callbacks)  -- Added callbacks
 type SpacePtr  = Ptr Space
@@ -159,18 +167,18 @@ type HandlerFunPtrs = (FunPtr (), FunPtr (), FunPtr (), FunPtr ())
 type CollisionType_ = #{type cpCollisionType}
 -- Duplicated to avoid bringing the documentation from Shape module.
 
-unP :: Space -> ForeignPtr Space
-unP (P sp _ _) = sp
+unSP :: Space -> ForeignPtr Space
+unSP (SP sp _ _) = sp
 
 instance Eq Space where
-    P s1 _ _ == P s2 _ _ = s1 == s2
+    SP s1 _ _ == SP s2 _ _ = s1 == s2
 
 instance Ord Space where
-    P s1 _ _ `compare` P s2 _ _ = s1 `compare` s2
+    SP s1 _ _ `compare` SP s2 _ _ = s1 `compare` s2
 
 -- | Internal. Retrieve a 'Shape' from a 'ShapePtr' and a 'Space'.
 retrieveShape :: Space -> ShapePtr -> IO (Maybe Shape)
-retrieveShape (P _ entities _) ptr = do
+retrieveShape (SP _ entities _) ptr = do
   ent <- readIORef entities
   case M.lookup (castPtr ptr) ent of
     Just (ReS shape) -> return $ Just shape
@@ -178,7 +186,7 @@ retrieveShape (P _ entities _) ptr = do
 
 -- | Internal. Retrieve a 'Body' from a 'BodyPtr' and a 'Space'.
 retrieveBody :: Space -> BodyPtr -> IO (Maybe Body)
-retrieveBody (P _ entities _) ptr = do
+retrieveBody (SP _ entities _) ptr = do
   ent <- readIORef entities
   case M.lookup (castPtr ptr) ent of
     Just (ReB body) -> return $ Just body
@@ -186,10 +194,10 @@ retrieveBody (P _ entities _) ptr = do
 
 -- | Internal. Retrieve a 'Constraint' from a 'ConstraintPtr' and a 'Space'.
 retrieveConstraint :: Space -> ConstraintPtr -> IO (Maybe (Constraint Unknown))
-retrieveConstraint (P _ entities _) ptr = do
+retrieveConstraint (SP _ entities _) ptr = do
   ent <- readIORef entities
   case M.lookup (castPtr ptr) ent of
-    Just (ReC constraint) -> return $ Just constraint 
+    Just (ReC constraint) -> return $ Just constraint
     _ -> return Nothing
 
 

@@ -54,6 +54,9 @@ module Physics.Hipmunk.Constraint
 import Foreign
 #include "wrapper.h"
 
+import Linear
+import Linear.Affine
+
 import Physics.Hipmunk.Common
 import Physics.Hipmunk.Internal
 import Physics.Hipmunk.Body (worldToLocal)
@@ -144,7 +147,7 @@ data Pin = Pin {pinAnchor1 :: !Position {-^ First anchor. -}
 
 instance ConstraintType Pin where
   size _ = #{size cpPinJoint}
-  init_ (Pin a1 a2) = with2 a1 a2 $ wrPinJointInit
+  init_ (Pin (P a1) (P a2)) = with2 a1 a2 $ wrPinJointInit
   redef ptr _ _ (Pin a1 a2) = do
       #{poke cpPinJoint, anchr1} ptr a1
       #{poke cpPinJoint, anchr2} ptr a2
@@ -159,7 +162,7 @@ data Slide = Slide {slideAnchor1 :: !Position {-^ First anchor. -}
 
 instance ConstraintType Slide where
   size _ = #{size cpSlideJoint}
-  init_ (Slide a1 a2 mn mx) = with2 a1 a2 $ wrSlideJointInit mn mx
+  init_ (Slide (P a1) (P a2) mn mx) = with2 a1 a2 $ wrSlideJointInit mn mx
   redef ptr _ _ (Slide a1 a2 mn mx) = do
       #{poke cpSlideJoint, anchr1} ptr a1
       #{poke cpSlideJoint, anchr2} ptr a2
@@ -181,8 +184,8 @@ data Pivot =
 
 instance ConstraintType Pivot where
   size _ = #{size cpPivotJoint}
-  init_ (Pivot1 pos)   = with1 pos   $ wrPivot1JointInit
-  init_ (Pivot2 a1 a2) = with2 a1 a2 $ wrPivot2JointInit
+  init_ (Pivot1 (P pos))   = with1 pos   $ wrPivot1JointInit
+  init_ (Pivot2 (P a1) (P a2)) = with2 a1 a2 $ wrPivot2JointInit
   redef ptr b1 b2 (Pivot1 pos) = do
       worldToLocal b1 pos >>= #{poke cpPivotJoint, anchr1} ptr
       worldToLocal b2 pos >>= #{poke cpPivotJoint, anchr2} ptr
@@ -199,8 +202,8 @@ data Groove = Groove {
 
 instance ConstraintType Groove where
   size _ = #{size cpGrooveJoint}
-  init_ (Groove (g1,g2) anchor) = with3 g1 g2 anchor $ wrGrooveJointInit
-  redef ptr _ _ (Groove (g1,g2) anchor) = do
+  init_ (Groove (P g1,P g2) (P anchor)) = with3 g1 g2 anchor $ wrGrooveJointInit
+  redef ptr _ _ (Groove (P g1,P g2) (P anchor)) = do
       #{poke cpGrooveJoint, grv_a} ptr g1
       #{poke cpGrooveJoint, grv_b} ptr g2
       #{poke cpGrooveJoint, grv_n} ptr $ perp $ normalize $ g1 - g2
@@ -232,7 +235,7 @@ data DampedSpring = DampedSpring {
 
 instance ConstraintType DampedSpring where
   size _ = #{size cpDampedSpring}
-  init_ (DampedSpring a1 a2 r s d) = with2 a1 a2 $ wrDampedSpringInit r s d
+  init_ (DampedSpring (P a1) (P a2) r s d) = with2 a1 a2 $ wrDampedSpringInit r s d
   redef ptr _ _ (DampedSpring a1 a2 r s d) = do
       #{poke cpDampedSpring, anchr1} ptr a1
       #{poke cpDampedSpring, anchr2} ptr a2

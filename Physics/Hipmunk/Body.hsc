@@ -63,6 +63,8 @@ module Physics.Hipmunk.Body
     )
     where
 
+import Linear hiding (angle)
+import Linear.Affine (Point(..))
 import Data.StateVar
 import Foreign hiding (rotate, new)
 #include "wrapper.h"
@@ -194,7 +196,7 @@ slew :: Body -> Position -> Time -> IO ()
 slew (B b) newpos dt = do
   withForeignPtr b $ \ptr -> do
     p <- #{peek cpBody, p} ptr
-    #{poke cpBody, v} ptr $ (newpos - p) `scale` (recip dt)
+    #{poke cpBody, v} ptr $ (newpos - p) ^/ dt
 
 
 -- | @updateVelocity b gravity damping dt@ redefines body @b@'s
@@ -242,7 +244,7 @@ resetForces b = do
 --   Note that the force is accumulated in the body, so you
 --   may need to call 'applyOnlyForce'.
 applyForce :: Body -> Vector -> Position -> IO ()
-applyForce (B b) f p =
+applyForce (B b) f (P p) =
   withForeignPtr b $ \b_ptr ->
   with f $ \f_ptr ->
   with p $ \p_ptr -> do
@@ -257,15 +259,15 @@ foreign import ccall unsafe "wrapper.h"
 --   function is preferable as it is optimized over this common
 --   case.
 applyOnlyForce :: Body -> Vector -> Position -> IO ()
-applyOnlyForce b f p = do
+applyOnlyForce b f (P p) = do
   force  b $= f
-  torque b $= p `cross` f
+  torque b $= p `crossZ` f
 
 
 -- | @applyImpulse b j r@ applies to the body @b@ the impulse
 --   @j@ with offset @r@, both vectors in world coordinates.
 applyImpulse :: Body -> Vector -> Position -> IO ()
-applyImpulse (B b) j r =
+applyImpulse (B b) j (P r) =
   withForeignPtr b $ \b_ptr ->
   with j $ \j_ptr ->
   with r $ \r_ptr -> do
@@ -279,8 +281,8 @@ foreign import ccall unsafe "wrapper.h"
 --   @localToWorld b p@ returns the corresponding vector
 --   in world coordinates.
 localToWorld :: Body -> Position -> IO Position
-localToWorld (B b) p =
-  withForeignPtr b $ \b_ptr ->
+localToWorld (B b) (P p) =
+  fmap P . withForeignPtr b $ \b_ptr ->
   with p $ \p_ptr -> do
     wrBodyLocal2World b_ptr p_ptr
     peek p_ptr
@@ -293,8 +295,8 @@ foreign import ccall unsafe "wrapper.h"
 --   @worldToLocal b p@ returns the corresponding vector
 --   in body @b@'s coordinates.
 worldToLocal :: Body -> Position -> IO Position
-worldToLocal (B b) p =
-  withForeignPtr b $ \b_ptr ->
+worldToLocal (B b) (P p) =
+  fmap P . withForeignPtr b $ \b_ptr ->
   with p $ \p_ptr -> do
     wrBodyWorld2Local b_ptr p_ptr
     peek p_ptr
