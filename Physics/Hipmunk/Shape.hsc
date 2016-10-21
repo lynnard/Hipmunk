@@ -16,7 +16,7 @@
 module Physics.Hipmunk.Shape
     (-- * Shapes
      Shape,
-     ShapeType(..),
+     shapeBody,
      newShape,
 
      -- * Properties
@@ -40,7 +40,6 @@ module Physics.Hipmunk.Shape
      surfaceVel,
 
      -- * Utilities
-     body,
      momentForShape,
      momentForCircle,
      momentForSegment,
@@ -75,56 +74,33 @@ import Linear.Affine (Point(..))
 
 import Physics.Hipmunk.Common
 import Physics.Hipmunk.Internal
-import Physics.Hipmunk.Body (Mass, Moment)
+import Physics.Hipmunk.Body (Moment)
 
-
--- | There are three types of shapes that can be attached
---   to bodies:
-data ShapeType =
-    -- | A circle is the fastest collision type. It also
-    --   rolls smoothly.
-    Circle {radius :: !Distance}
-
-    -- | A line segment is meant to be used as a static
-    --   shape. (It can be used with moving bodies, however
-    --   two line segments never generate collisions between
-    --   each other.)
-  | LineSegment {start     :: !Position,
-                 end       :: !Position,
-                 thickness :: !Distance}
-
-    -- | Polygons are the slowest of all shapes but
-    --   the most flexible. The list of vertices must form
-    --   a convex hull with clockwise winding.
-    --   Note that if you want a non-convex polygon you may
-    --   add several convex polygons to the body.
-  | Polygon {vertices :: ![Position]}
-    deriving (Eq, Ord, Show)
 
 
 -- | @newShape b type off@ creates a new shape attached to
 --   body @b@ at offset @off@. Note that you have to
 --   add the shape to a space otherwise it won't generate
 --   collisions.
-newShape :: Body -> ShapeType -> Position -> IO Shape
-newShape body_@(B b) (Circle r) (P off) =
+newShape :: Body -> ShapeDefinition' -> IO Shape
+newShape body_@(B b) def@(ShapeDefinition (Circle r) (P off) _ _ _) =
   withForeignPtr b $ \b_ptr ->
   with off $ \off_ptr ->
   mallocForeignPtrBytes #{size cpCircleShape} >>= \shape ->
   withForeignPtr shape $ \shape_ptr -> do
     wrCircleShapeInit shape_ptr b_ptr off_ptr r
-    return (S shape body_)
+    return (S shape body_ def)
 
-newShape body_@(B b) (LineSegment (P p1) (P p2) r) (P off) =
+newShape body_@(B b) def@(ShapeDefinition (LineSegment (P p1) (P p2) r) (P off) _ _ _) =
   withForeignPtr b $ \b_ptr ->
   with (p1+off) $ \p1off_ptr ->
   with (p2+off) $ \p2off_ptr ->
   mallocForeignPtrBytes #{size cpSegmentShape} >>= \shape ->
   withForeignPtr shape $ \shape_ptr -> do
     wrSegmentShapeInit shape_ptr b_ptr p1off_ptr p2off_ptr r
-    return (S shape body_)
+    return (S shape body_ def)
 
-newShape body_@(B b) (Polygon verts) (P off) =
+newShape body_@(B b) def@(ShapeDefinition (Polygon verts) (P off) _ _ _) =
   withForeignPtr b $ \b_ptr ->
   with off $ \off_ptr ->
   withArrayLen (unP <$> verts) $ \verts_len verts_ptr ->
@@ -133,7 +109,7 @@ newShape body_@(B b) (Polygon verts) (P off) =
     let verts_len' = fromIntegral verts_len
     wrPolyShapeInit shape_ptr b_ptr verts_len' verts_ptr off_ptr
     addForeignPtrFinalizer cpShapeDestroy shape
-    return (S shape body_)
+    return (S shape body_ def)
 
 foreign import ccall unsafe "wrapper.h"
     wrCircleShapeInit :: ShapePtr -> BodyPtr -> VectorPtr
@@ -148,12 +124,6 @@ foreign import ccall unsafe "wrapper.h &cpShapeDestroy"
     cpShapeDestroy :: FunPtr (ShapePtr -> IO ())
 
 
--- | @body s@ is the body that this shape is associated
---   to. Useful especially in a space callback.
-body :: Shape -> Body
-body (S _ b) = b
-
-
 -- | The collision type is used to determine which collision
 --   callback will be called. Its actual value doesn't have a
 --   meaning for Chipmunk other than the correspondence between
@@ -162,7 +132,7 @@ body (S _ b) = b
 
 type CollisionType = #{type cpCollisionType}
 collisionType :: Shape -> StateVar CollisionType
-collisionType (S shape _) = makeStateVar getter setter
+collisionType (S shape _ _) = makeStateVar getter setter
     where
       getter = withForeignPtr shape #{peek cpShape, collision_type}
       setter = withForeignPtr shape . flip #{poke cpShape, collision_type}
@@ -179,7 +149,7 @@ collisionType (S shape _) = makeStateVar getter setter
 --   collisions.
 type Group = #{type cpGroup}
 group :: Shape -> StateVar Group
-group (S shape _) = makeStateVar getter setter
+group (S shape _ _) = makeStateVar getter setter
     where
       getter = withForeignPtr shape #{peek cpShape, group}
       setter = withForeignPtr shape . flip #{poke cpShape, group}
@@ -193,7 +163,7 @@ group (S shape _) = makeStateVar getter setter
 --   for portability you should only rely on the lower 32 bits.
 type Layers = #{type cpLayers}
 layers :: Shape -> StateVar Layers
-layers (S shape _) = makeStateVar getter setter
+layers (S shape _ _) = makeStateVar getter setter
     where
       getter = withForeignPtr shape #{peek cpShape, layers}
       setter = withForeignPtr shape . flip #{poke cpShape, layers}
@@ -211,7 +181,7 @@ layers (S shape _) = makeStateVar getter setter
 --   simulation, but now this is the recommended setting.
 type Elasticity = CpFloat
 elasticity :: Shape -> StateVar Elasticity
-elasticity (S shape _) = makeStateVar getter setter
+elasticity (S shape _ _) = makeStateVar getter setter
     where
       getter = withForeignPtr shape #{peek cpShape, e}
       setter = withForeignPtr shape . flip #{poke cpShape, e}
@@ -226,7 +196,7 @@ elasticity (S shape _) = makeStateVar getter setter
 --   of both shapes. (default is zero)
 type Friction = CpFloat
 friction :: Shape -> StateVar Friction
-friction (S shape _) = makeStateVar getter setter
+friction (S shape _ _) = makeStateVar getter setter
     where
       getter = withForeignPtr shape #{peek cpShape, u}
       setter = withForeignPtr shape . flip #{poke cpShape, u}
@@ -237,7 +207,7 @@ friction (S shape _) = makeStateVar getter setter
 --   collision. (default is zero)
 type SurfaceVel = Vector
 surfaceVel :: Shape -> StateVar SurfaceVel
-surfaceVel (S shape _) = makeStateVar getter setter
+surfaceVel (S shape _ _) = makeStateVar getter setter
     where
       getter = withForeignPtr shape #{peek cpShape, surface_v}
       setter = withForeignPtr shape . flip #{poke cpShape, surface_v}
@@ -305,7 +275,7 @@ pairs f l = zipWith f l (tail $ cycle l)
 --   in position @p@ (in world's coordinates) lies within the
 --   shape @shape@.
 shapePointQuery :: Shape -> Position -> IO Bool
-shapePointQuery (S shape _) (P p) =
+shapePointQuery (S shape _ _) (P p) =
   withForeignPtr shape $ \shape_ptr ->
   with p $ \p_ptr -> do
     i <- wrShapePointQuery shape_ptr p_ptr
@@ -321,7 +291,7 @@ foreign import ccall unsafe "wrapper.h"
 --   (p2 - p1) \`scale\` t@ with normal @n@.
 shapeSegmentQuery :: Shape -> Position -> Position
                   -> IO (Maybe (CpFloat, Vector))
-shapeSegmentQuery (S shape _) (P p1) (P p2) =
+shapeSegmentQuery (S shape _ _) (P p1) (P p2) =
     withForeignPtr shape $ \shape_ptr ->
     with p1 $ \p1_ptr ->
     with p2 $ \p2_ptr ->

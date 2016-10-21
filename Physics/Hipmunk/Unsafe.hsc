@@ -33,7 +33,6 @@ import Linear.Affine
 
 import Physics.Hipmunk.Common
 import Physics.Hipmunk.Internal
-import Physics.Hipmunk.Shape
 
 -- | @unsafeShapeRedefine shape type off@ redefines @shape@ to
 --   have new parameters described on @type@ and to be at offset
@@ -42,21 +41,21 @@ import Physics.Hipmunk.Shape
 --   but it is an error to try to change a circle into a segment
 --   or a polygon.  Note also that these errors /are not/
 --   /checked/, meaning /they will probably crash Chipmunk/.
-unsafeShapeRedefine :: Shape -> ShapeType -> Position -> IO ()
-unsafeShapeRedefine (S shape _) (Circle r) (P off) =
+unsafeShapeRedefine :: Shape -> ShapeDefinition' -> IO ()
+unsafeShapeRedefine (S shape _ _) (ShapeDefinition (Circle r) (P off) _ _ _) =
   withForeignPtr shape $ \shape_ptr ->
   with off $ \off_ptr -> do
     cpCircleShapeSetRadius shape_ptr r
     wrCircleShapeSetOffset shape_ptr off_ptr
 
-unsafeShapeRedefine (S shape _) (LineSegment (P p1) (P p2) r) (P off) =
+unsafeShapeRedefine (S shape _ _) (ShapeDefinition (LineSegment (P p1) (P p2) r) (P off) _ _ _) =
   withForeignPtr shape $ \shape_ptr ->
   with (p1+off) $ \p1off_ptr ->
   with (p2+off) $ \p2off_ptr -> do
     wrSegmentShapeSetEndpoints shape_ptr p1off_ptr p2off_ptr
     cpSegmentShapeSetRadius shape_ptr r
 
-unsafeShapeRedefine (S shape _) (Polygon verts) (P off) =
+unsafeShapeRedefine (S shape _ _) (ShapeDefinition (Polygon verts) (P off) _ _ _) =
   withForeignPtr shape $ \shape_ptr ->
   with off $ \off_ptr ->
   withArrayLen (unP <$> verts) $ \verts_len verts_ptr -> do

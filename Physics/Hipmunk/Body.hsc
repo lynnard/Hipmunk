@@ -20,7 +20,6 @@ module Physics.Hipmunk.Body
      -- * Static properties
      -- ** Basic
      -- *** Mass
-     Mass,
      mass,
      -- *** Moment of inertia
      Moment,
@@ -47,6 +46,8 @@ module Physics.Hipmunk.Body
      -- *** Torque
      Torque,
      torque,
+
+     inSpace,
 
      -- * Dynamic properties
      slew,
@@ -87,8 +88,6 @@ foreign import ccall unsafe "wrapper.h"
     cpBodyInit :: BodyPtr -> CpFloat -> CpFloat -> IO ()
 
 
-
-type Mass = CpFloat
 
 mass :: Body -> StateVar Mass
 mass (B b) = makeStateVar getter setter
@@ -185,6 +184,11 @@ torque (B b) = makeStateVar getter setter
       getter = withForeignPtr b #{peek cpBody, t}
       setter = withForeignPtr b . flip #{poke cpBody, t}
 
+
+inSpace :: Body -> IO Bool
+inSpace (B b) = do
+    spacePtr <- withForeignPtr b #{peek cpBody, space}
+    return $ spacePtr /= nullPtr
 
 -- | @slew b newpos dt@ changes the body @b@'s velocity
 --   so that it reaches @newpos@ in @dt@ time.

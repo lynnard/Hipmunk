@@ -1,3 +1,6 @@
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# CFILES
@@ -56,6 +59,18 @@ module Physics.Hipmunk.Common
      Distance,
      Damping,
 
+     -- * Shape
+     Mass,
+     ShapeType(Circle, LineSegment, Polygon),
+     circleRadius,
+     lineStart,
+     lineEnd,
+     lineThickness,
+     polyVertices,
+     HasShapeDefinition(..),
+     ShapeDefinition(ShapeDefinition),
+     ShapeDefinition',
+
      -- * Global variables
      -- $global_vars
 
@@ -86,9 +101,11 @@ module Physics.Hipmunk.Common
     )
     where
 
+import Data.Default
 import Foreign hiding (rotate)
 import Linear
 import Linear.Affine (Point(..))
+import Control.Lens
 -- import Foreign.C.Types (CInt)
 #include "wrapper.h"
 
@@ -127,7 +144,6 @@ type Distance = CpFloat
 -- | Type synonym used to hint that the argument or result
 --   represents a damping constant.
 type Damping = CpFloat
-
 
 -- $global_vars
 --   Chipmunk tries to maintain a very few number of global
@@ -181,3 +197,53 @@ instance {-# OVERLAPPING #-} Storable Vector where
     poke ptr (V2 x y) = do
       #{poke cpVect, x} ptr x
       #{poke cpVect, y} ptr y
+
+type Mass = CpFloat
+
+-- | There are three types of shapes that can be attached
+--   to bodies:
+data ShapeType =
+    -- | A circle is the fastest collision type. It also
+    --   rolls smoothly.
+    Circle {_circleRadius :: !Distance}
+
+    -- | A line segment is meant to be used as a static
+    --   shape. (It can be used with moving bodies, however
+    --   two line segments never generate collisions between
+    --   each other.)
+  | LineSegment {_lineStart     :: !Position,
+                 _lineEnd       :: !Position,
+                 _lineThickness :: !Distance}
+
+    -- | Polygons are the slowest of all shapes but
+    --   the most flexible. The list of vertices must form
+    --   a convex hull with clockwise winding.
+    --   Note that if you want a non-convex polygon you may
+    --   add several convex polygons to the body.
+  | Polygon {_polyVertices :: ![Position]}
+    deriving (Eq, Ord, Show)
+
+makeLenses ''ShapeType
+
+-- TODO: parameterize over double or float?
+data ShapeDefinition a = ShapeDefinition
+    { _shapeType :: !ShapeType
+    , _shapeOffset :: !(Point V2 a)
+    , _shapeMass :: !a
+    , _categoryMask :: !Word64
+    , _collisionMask :: !Word64
+    } deriving (Eq, Ord, Show)
+
+makeClassy ''ShapeDefinition
+
+type ShapeDefinition' = ShapeDefinition CpFloat
+
+instance (Num a, Fractional a) => Default (ShapeDefinition a) where
+    def = ShapeDefinition
+        { _shapeType = LineSegment 0 0 0
+        , _shapeOffset = 0
+        , _shapeMass = 1/0
+        , _categoryMask = 0
+        -- mask that allows it to collide with everything else
+        , _collisionMask = maxBound
+        }

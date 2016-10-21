@@ -220,17 +220,14 @@ Library
   C-Sources:
         Physics/Hipmunk/wrapper.c
 
-  if flag(small_base)
-    Build-Depends: base >= 3 && < 5,
-                   array >= 0.1 && < 0.6,
-                   containers >= 0.1 && < 0.6,
-                   transformers >= 0.2 && < 0.6,
-                   StateVar >= 1.0 && < 1.2,
-                   linear
-  else
-    Build-Depends: base >= 2 && < 3,
-                   transformers >= 0.2 && < 0.5,
-                   StateVar >= 1.0 && < 1.2
+  Build-Depends: base >= 3 && < 5,
+                 array >= 0.1 && < 0.6,
+                 containers >= 0.1 && < 0.6,
+                 transformers >= 0.2 && < 0.6,
+                 StateVar >= 1.0 && < 1.2,
+                 linear,
+                 lens,
+                 data-default
 
   Extensions:    CPP, ForeignFunctionInterface, EmptyDataDecls
   Build-Tools:   hsc2hs

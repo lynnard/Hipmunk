@@ -1,3 +1,6 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE TemplateHaskell #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Physics/Hipmunk/Internal.hsc
@@ -17,9 +20,11 @@ module Physics.Hipmunk.Internal
      Body(..),
      unB,
 
+     shapeBody,
      ShapePtr,
      Shape(..),
      unS,
+
 
      ConstraintPtr,
      Constraint(..),
@@ -59,6 +64,7 @@ import Foreign
 #include "wrapper.h"
 
 import Linear.Affine (Point(..))
+import Control.Lens
 
 import Physics.Hipmunk.Common
 
@@ -91,8 +97,21 @@ instance Ord Body where
 --
 --   Note that to have any effect, a 'Shape' must also be
 --   added to a 'Space', even if the body was already added.
-data Shape = S !(ForeignPtr Shape) !Body
+
+
+data Shape = S
+    { foreignShape :: !(ForeignPtr Shape)
+    , _shapeBody :: !Body
+    , _shToShapeDefinition :: !ShapeDefinition'
+    }
+
+makeLenses ''Shape
+
 type ShapePtr = Ptr Shape
+
+instance HasShapeDefinition Shape CpFloat where
+    shapeDefinition = shToShapeDefinition
+
 
 -- Note also that we have to maintain a reference to the
 -- 'Body' to avoid garbage collection in the case that
@@ -106,13 +125,13 @@ type ShapePtr = Ptr Shape
 -- own reference the the shape.
 
 unS :: Shape -> ForeignPtr Shape
-unS (S s _) = s
+unS (S s _ _) = s
 
 instance Eq Shape where
-    S s1 _ == S s2 _ = s1 == s2
+    S s1 _ _ == S s2 _ _ = s1 == s2
 
 instance Ord Shape where
-    S s1 _ `compare` S s2 _ = s1 `compare` s2
+    S s1 _ _ `compare` S s2 _ _ = s1 `compare` s2
 
 
 
@@ -155,8 +174,8 @@ unP (P a) = a
 --   bodies, shapes and constraints to a space and then @step@ it
 --   to update it as whole.
 data Space = SP !(ForeignPtr Space)
-               !(IORef Entities)   -- Active and static entities
-               !(IORef Callbacks)  -- Added callbacks
+                !(IORef Entities)   -- Active and static entities
+                !(IORef Callbacks)  -- Added callbacks
 type SpacePtr  = Ptr Space
 data Retrievable = ReS Shape | ReB Body | ReC (Constraint Unknown)
 type Entities  = Map (Ptr ()) Retrievable
