@@ -74,7 +74,6 @@ import Linear.Affine (Point(..))
 
 import Physics.Hipmunk.Common
 import Physics.Hipmunk.Internal
-import Physics.Hipmunk.Body (Moment)
 
 
 
@@ -205,7 +204,7 @@ friction (S shape _ _) = makeStateVar getter setter
 --   conveyor belts and players that move around. This
 --   value is only used when calculating friction, not
 --   collision. (default is zero)
-type SurfaceVel = Vector
+type SurfaceVel = Vector'
 surfaceVel :: Shape -> StateVar SurfaceVel
 surfaceVel (S shape _ _) = makeStateVar getter setter
     where
@@ -220,7 +219,7 @@ surfaceVel (S shape _ _) = makeStateVar getter setter
 --   the moment of inertia for shape @s@ with mass @m@ and at a
 --   offset @off@ of the body's center.  Uses 'momentForCircle',
 --   'momentForSegment' and 'momentForPoly' internally.
-momentForShape :: Mass -> ShapeType -> Position -> Moment
+momentForShape :: (Floating a, Eq a) => a -> ShapeType a -> Position a -> a
 momentForShape m (Circle r)            off = m*(r*r + (off `dot` off))
 momentForShape m (LineSegment p1 p2 _) off = momentForSegment m (p1+off) (p2+off)
 momentForShape m (Polygon verts)       off = momentForPoly m verts off
@@ -228,7 +227,7 @@ momentForShape m (Polygon verts)       off = momentForPoly m verts off
 -- | @momentForCircle m (ri,ro) off@ is the moment of inertia
 --   of a circle of @m@ mass, inner radius of @ri@, outer radius
 --   of @ro@ and at an offset @off@ from the center of the body.
-momentForCircle :: Mass -> (Distance, Distance) -> Position -> Moment
+momentForCircle :: (Fractional a) => a -> (a, a) -> Position a -> a
 momentForCircle m (ri,ro) off = (m/2)*(ri*ri + ro*ro) + m*(off `dot` off)
 -- We recoded the C function to avoid FFI and unsafePerformIO
 -- on this simple function.
@@ -236,7 +235,7 @@ momentForCircle m (ri,ro) off = (m/2)*(ri*ri + ro*ro) + m*(off `dot` off)
 
 -- | @momentForSegment m p1 p2@ is the moment of inertia of a
 --   segment of mass @m@ going from point @p1@ to point @p2@.
-momentForSegment :: Mass -> Position -> Position -> Moment
+momentForSegment :: (Floating a) => a -> Position a -> Position a -> a
 momentForSegment m p1 p2 =
     let len' = norm (p2 - p1)
         offset = (p1 + p2) ^/ 2
@@ -250,7 +249,7 @@ momentForSegment m p1 p2 =
 --   the body and comprised of @verts@ vertices. This is similar
 --   to 'Polygon' (and the same restrictions for the vertices
 --   apply as well).
-momentForPoly :: Mass -> [Position] -> Position -> Moment
+momentForPoly :: (Num a, Fractional a, Eq a) => a -> [Position a] -> Position a -> a
 momentForPoly m vts (P off) = (m*sum1)/(6*sum2)
   where
     verts = unP <$> vts
@@ -274,7 +273,7 @@ pairs f l = zipWith f l (tail $ cycle l)
 -- | @shapePointQuery shape p@ returns @True@ iff the point
 --   in position @p@ (in world's coordinates) lies within the
 --   shape @shape@.
-shapePointQuery :: Shape -> Position -> IO Bool
+shapePointQuery :: Shape -> Position' -> IO Bool
 shapePointQuery (S shape _ _) (P p) =
   withForeignPtr shape $ \shape_ptr ->
   with p $ \p_ptr -> do
@@ -289,8 +288,8 @@ foreign import ccall unsafe "wrapper.h"
 --   intersects with the shape @shape@.  In that case, @0 <= t <=
 --   1@ indicates that one of the intersections is at point @p1 +
 --   (p2 - p1) \`scale\` t@ with normal @n@.
-shapeSegmentQuery :: Shape -> Position -> Position
-                  -> IO (Maybe (CpFloat, Vector))
+shapeSegmentQuery :: Shape -> Position' -> Position'
+                  -> IO (Maybe (CpFloat, Vector'))
 shapeSegmentQuery (S shape _ _) (P p1) (P p2) =
     withForeignPtr shape $ \shape_ptr ->
     with p1 $ \p1_ptr ->
@@ -327,11 +326,11 @@ epsilon = 1e-25
 a .==. b = abs (a - b) <= epsilon
 
 -- | A line segment.
-type Segment = (Position, Position)
+type Segment = (Position', Position')
 
 -- | /O(n)/. @isClockwise verts@ is @True@ iff @verts@ form
 --   a clockwise polygon.
-isClockwise :: [Position] -> Bool
+isClockwise :: [Position'] -> Bool
 isClockwise = (<= 0) . foldl' (+) 0 . pairs crossZ . fmap unP
 
 -- | @isLeft (p1,p2) vert@ is
@@ -341,12 +340,12 @@ isClockwise = (<= 0) . foldl' (+) 0 . pairs crossZ . fmap unP
 --    * @EQ@ if @vert@ is at the line @(p1,p2)@.
 --
 --    * @GT@ otherwise.
-isLeft :: (Position, Position) -> Position -> Ordering
+isLeft :: (Position', Position') -> Position' -> Ordering
 isLeft (P p1,P p2) (P vert) = compare 0 $ (p1 - vert) `crossZ` (p2 - vert)
 
 -- | /O(n)/. @isConvex verts@ is @True@ iff @vers@ form a convex
 --   polygon.
-isConvex :: [Position] -> Bool
+isConvex :: [Position'] -> Bool
 isConvex = foldl1 (==) . map (0 <) . filter (0 /=) . pairs crossZ . pairs (-) . fmap unP
 -- From http://apocalisp.wordpress.com/category/programming/haskell/page/2/
 
@@ -420,7 +419,7 @@ intersects (P a0,P a1) (P b0,P b1) =
 
 -- | A possible intersection between two segments.
 data Intersection = IntNowhere         -- ^ Don't intercept.
-                  | IntPoint !Position -- ^ Intercept in a point.
+                  | IntPoint !Position' -- ^ Intercept in a point.
                   | IntSegmt !Segment  -- ^ Share a segment.
                     deriving (Eq, Ord, Show)
 
@@ -432,7 +431,7 @@ data Intersection = IntNowhere         -- ^ Don't intercept.
 --   Note that a very small polygon may be completely \"eaten\"
 --   if all its vertices are within a @delta@ radius from the
 --   first.
-polyReduce :: Distance -> [Position] -> [Position]
+polyReduce :: Distance -> [Position'] -> [Position']
 polyReduce delta = go
     where
       go (p1:p2:ps) | norm (p2-p1) < delta = go (p1:ps)
@@ -441,7 +440,7 @@ polyReduce delta = go
 
 -- | /O(n)/. @polyCenter verts@ is the position in the center
 --   of the polygon formed by @verts@.
-polyCenter :: [Position] -> Position
+polyCenter :: [Position'] -> Position'
 polyCenter verts = foldl' (+) 0 verts ^* s
     where s = recip $ toEnum $ length verts
 
@@ -453,7 +452,7 @@ polyCenter verts = foldl' (+) 0 verts ^* s
 --
 --   Implemented using Graham scan, see
 --   <http://cgm.cs.mcgill.ca/~beezer/cs507/3coins.html>.
-convexHull :: [Position] -> [Position]
+convexHull :: [Position'] -> [Position']
 convexHull verts =
   let (p0,ps) = takeMinimum verts
       (_:p1:points) = p0 : sortBy (isLeft . (,) p0) ps

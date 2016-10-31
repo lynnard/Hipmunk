@@ -126,14 +126,14 @@ foreign import ccall unsafe "wrapper.h"
 -- | Note that using this function to change the position
 --   on every step is not recommended as it may leave
 --   the velocity out of sync.
-position :: Body -> StateVar Position
+position :: Body -> StateVar Position'
 position (B b) = makeStateVar getter setter
     where
       getter = withForeignPtr b #{peek cpBody, p}
       setter = withForeignPtr b . flip #{poke cpBody, p}
 
 
-type Velocity = Vector
+type Velocity = Vector'
 
 velocity :: Body -> StateVar Velocity
 velocity (B b) = makeStateVar getter setter
@@ -150,7 +150,7 @@ maxVelocity (B b) = makeStateVar getter setter
 
 
 
-type Force = Vector
+type Force = Vector'
 
 force :: Body -> StateVar Force
 force (B b) = makeStateVar getter setter
@@ -196,7 +196,7 @@ inSpace (B b) = do
 --   It is usually used to change the position of a
 --   static body in the world. In that case, remember
 --   to reset the velocity to zero afterwards!
-slew :: Body -> Position -> Time -> IO ()
+slew :: Body -> Position' -> Time -> IO ()
 slew (B b) newpos dt = do
   withForeignPtr b $ \ptr -> do
     p <- #{peek cpBody, p} ptr
@@ -210,7 +210,7 @@ slew (B b) newpos dt = do
 --
 --   Note that this function only needs to be called if you
 --   are not adding the body to a space.
-updateVelocity :: Body -> Vector -> Damping -> Time -> IO ()
+updateVelocity :: Body -> Vector' -> Damping -> Time -> IO ()
 updateVelocity (B b) g d dt =
   withForeignPtr b $ \b_ptr ->
   with g $ \g_ptr -> do
@@ -247,7 +247,7 @@ resetForces b = do
 --
 --   Note that the force is accumulated in the body, so you
 --   may need to call 'applyOnlyForce'.
-applyForce :: Body -> Vector -> Position -> IO ()
+applyForce :: Body -> Vector' -> Position' -> IO ()
 applyForce (B b) f (P p) =
   withForeignPtr b $ \b_ptr ->
   with f $ \f_ptr ->
@@ -262,7 +262,7 @@ foreign import ccall unsafe "wrapper.h"
 --   but calling 'resetForces' before. Note that using this
 --   function is preferable as it is optimized over this common
 --   case.
-applyOnlyForce :: Body -> Vector -> Position -> IO ()
+applyOnlyForce :: Body -> Vector' -> Position' -> IO ()
 applyOnlyForce b f (P p) = do
   force  b $= f
   torque b $= p `crossZ` f
@@ -270,7 +270,7 @@ applyOnlyForce b f (P p) = do
 
 -- | @applyImpulse b j r@ applies to the body @b@ the impulse
 --   @j@ with offset @r@, both vectors in world coordinates.
-applyImpulse :: Body -> Vector -> Position -> IO ()
+applyImpulse :: Body -> Vector' -> Position' -> IO ()
 applyImpulse (B b) j (P r) =
   withForeignPtr b $ \b_ptr ->
   with j $ \j_ptr ->
@@ -284,7 +284,7 @@ foreign import ccall unsafe "wrapper.h"
 -- | For a vector @p@ in body @b@'s coordinates,
 --   @localToWorld b p@ returns the corresponding vector
 --   in world coordinates.
-localToWorld :: Body -> Position -> IO Position
+localToWorld :: Body -> Position' -> IO Position'
 localToWorld (B b) (P p) =
   fmap P . withForeignPtr b $ \b_ptr ->
   with p $ \p_ptr -> do
@@ -298,7 +298,7 @@ foreign import ccall unsafe "wrapper.h"
 -- | For a vector @p@ in world coordinates,
 --   @worldToLocal b p@ returns the corresponding vector
 --   in body @b@'s coordinates.
-worldToLocal :: Body -> Position -> IO Position
+worldToLocal :: Body -> Position' -> IO Position'
 worldToLocal (B b) (P p) =
   fmap P . withForeignPtr b $ \b_ptr ->
   with p $ \p_ptr -> do

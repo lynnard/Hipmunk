@@ -97,7 +97,9 @@ module Physics.Hipmunk.Common
 
      -- * Vectors
      Vector,
+     Vector',
      Position,
+     Position',
     )
     where
 
@@ -180,14 +182,16 @@ type BiasCoef = CpFloat
 -- | A two-dimensional vector. It is an instance of 'Num'
 --   however the operations 'signum' and @(*)@ are not
 --   supported.
-type Vector = V2 CpFloat
+type Vector a = V2 a
+type Vector' = Vector CpFloat
 
 -- | Type synonym used to hint that the argument or result
 --   represents a position.
-type Position = Point V2 CpFloat
+type Position a = Point V2 a
+type Position' = Position CpFloat
 
 
-instance {-# OVERLAPPING #-} Storable Vector where
+instance {-# OVERLAPPING #-} Storable Vector' where
     sizeOf _    = #{size cpVect}
     alignment _ = alignment (undefined :: CpFloat)
     peek ptr = do
@@ -202,36 +206,41 @@ type Mass = CpFloat
 
 -- | There are three types of shapes that can be attached
 --   to bodies:
-data ShapeType =
+data ShapeType a =
     -- | A circle is the fastest collision type. It also
     --   rolls smoothly.
-    Circle {_circleRadius :: !Distance}
+    Circle {_circleRadius :: !a}
 
     -- | A line segment is meant to be used as a static
     --   shape. (It can be used with moving bodies, however
     --   two line segments never generate collisions between
     --   each other.)
-  | LineSegment {_lineStart     :: !Position,
-                 _lineEnd       :: !Position,
-                 _lineThickness :: !Distance}
+  | LineSegment {_lineStart     :: !(Position a),
+                 _lineEnd       :: !(Position a),
+                 _lineThickness :: !a}
 
     -- | Polygons are the slowest of all shapes but
     --   the most flexible. The list of vertices must form
     --   a convex hull with clockwise winding.
     --   Note that if you want a non-convex polygon you may
     --   add several convex polygons to the body.
-  | Polygon {_polyVertices :: ![Position]}
+  | Polygon {_polyVertices :: ![Position a]}
     deriving (Eq, Ord, Show)
 
 makeLenses ''ShapeType
 
+instance Functor ShapeType where
+    fmap f (Circle a) = Circle (f a)
+    fmap f (LineSegment start end thick) = LineSegment (f <$> start) (f <$> end) (f thick)
+    fmap f (Polygon verts) = Polygon (fmap f <$> verts)
+
 -- TODO: parameterize over double or float?
 data ShapeDefinition a = ShapeDefinition
-    { _shapeType :: !ShapeType
-    , _shapeOffset :: !(Point V2 a)
+    { _shapeType :: !(ShapeType a)
+    , _shapeOffset :: !(Position a)
     , _shapeMass :: !a
-    , _categoryMask :: !Word64
-    , _collisionMask :: !Word64
+    , _shapeCategoryMask :: !Word64
+    , _shapeCollisionMask :: !Word64
     } deriving (Eq, Ord, Show)
 
 makeClassy ''ShapeDefinition
@@ -243,7 +252,7 @@ instance (Num a, Fractional a) => Default (ShapeDefinition a) where
         { _shapeType = LineSegment 0 0 0
         , _shapeOffset = 0
         , _shapeMass = 1/0
-        , _categoryMask = 0
+        , _shapeCategoryMask = 0
         -- mask that allows it to collide with everything else
-        , _collisionMask = maxBound
+        , _shapeCollisionMask = maxBound
         }

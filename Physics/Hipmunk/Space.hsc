@@ -276,7 +276,7 @@ iterations (SP sp _ _) = makeStateVar getter setter
       setter = withForeignPtr sp . flip #{poke cpSpace, iterations}
 
 -- | The gravity applied to the system. (default is 0)
-type Gravity = Vector
+type Gravity = Vector'
 gravity :: Space -> StateVar Gravity
 gravity (SP sp _ _) = makeStateVar getter setter
     where
@@ -366,7 +366,7 @@ foreign import ccall unsafe "wrapper.h"
 --   However it is guaranteed that it will be called once,
 --   and only once, for each of the shapes described above
 --   (and never for those who aren't).
-spaceQuery :: Space -> Position -> Layers -> Group -> (Shape -> IO ()) -> IO ()
+spaceQuery :: Space -> Position' -> Layers -> Group -> (Shape -> IO ()) -> IO ()
 spaceQuery spce@(SP sp _ _) (P pos) layers_ group_ callback =
   withForeignPtr sp $ \sp_ptr ->
   bracket (makePointQueryFunc cb) freeHaskellFunPtr $ \cb_ptr ->
@@ -392,7 +392,7 @@ foreign import ccall safe "wrapper.h"
 -- | @spaceQueryList sp pos l g@ acts like 'spaceQuery' but
 --   returns a list of 'Shape's instead of calling a callback.
 --   This is just a convenience function.
-spaceQueryList :: Space -> Position -> Layers -> Group -> IO [Shape]
+spaceQueryList :: Space -> Position' -> Layers -> Group -> IO [Shape]
 spaceQueryList spce pos layers_ group_ = do
   var <- newIORef []
   spaceQuery spce pos layers_ group_ $ modifyIORef var . (:)

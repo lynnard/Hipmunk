@@ -69,7 +69,7 @@ import Control.Lens
 import Physics.Hipmunk.Common
 
 
-type VectorPtr = Ptr Vector
+type VectorPtr = Ptr Vector'
 
 
 
@@ -165,7 +165,7 @@ class ConstraintType a where
   redef :: ConstraintPtr -> Body -> Body -> a -> IO ()
 
 
-unP :: Position -> Vector
+unP :: Position a -> Vector a
 unP (P a) = a
 {-# INLINE unP #-}
 
@@ -263,10 +263,10 @@ type ArbiterPtr = Ptr Arbiter
 --   processing later. However, /a new call to/ @step@ /will/
 --   /invalidate any of those arrays!/ Be careful.
 data Contact = Contact {
-      ctPos    :: Position,
+      ctPos    :: Position',
       -- ^ Position of the collision in world's coordinates.
 
-      ctNormal :: Vector,
+      ctNormal :: Vector',
       -- ^ Normal of the collision.
 
       ctDist   :: CpFloat,
@@ -286,7 +286,7 @@ type ContactPtr = Ptr Contact
 
 instance Storable Contact where
     sizeOf _    = #{size cpContact}
-    alignment _ = alignment (undefined :: Vector)
+    alignment _ = alignment (undefined :: Vector')
     peek ptr    = do
       p     <- #{peek cpContact, p} ptr
       n     <- #{peek cpContact, n} ptr

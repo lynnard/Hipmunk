@@ -141,8 +141,8 @@ forgetC (C c b1 b2) = C c b1 b2
 
 -- | A pin joint connects the bodies with a solid pin.
 --   The anchor points are kept at a fixed distance.
-data Pin = Pin {pinAnchor1 :: !Position {-^ First anchor. -}
-               ,pinAnchor2 :: !Position {-^ Second anchor. -}}
+data Pin = Pin {pinAnchor1 :: !Position' {-^ First anchor. -}
+               ,pinAnchor2 :: !Position' {-^ Second anchor. -}}
     deriving (Eq, Ord, Show)
 
 instance ConstraintType Pin where
@@ -154,8 +154,8 @@ instance ConstraintType Pin where
 
 -- | A slide joint is similar to a pin joint, however
 --   it has a minimum and a maximum distance.
-data Slide = Slide {slideAnchor1 :: !Position {-^ First anchor. -}
-                   ,slideAnchor2 :: !Position {-^ Second anchor. -}
+data Slide = Slide {slideAnchor1 :: !Position' {-^ First anchor. -}
+                   ,slideAnchor2 :: !Position' {-^ Second anchor. -}
                    ,slideMinDist :: !Distance {-^ Minimum distance. -}
                    ,slideMaxDist :: !Distance {-^ Maximum distance. -}}
     deriving (Eq, Ord, Show)
@@ -174,12 +174,12 @@ instance ConstraintType Slide where
 data Pivot =
     -- | You may specify the pivot point in world's coordinates
     --   (so both bodies should be already in place).
-    Pivot1 {pivotPos :: !Position {-^ Pivot point in world's coordinates. -}}
+    Pivot1 {pivotPos :: !Position' {-^ Pivot point in world's coordinates. -}}
     -- | Or you may specify the joint as two anchors (on each
     --   body's coordinates), removing the need having the bodies
     --   already in place.
-  | Pivot2 {pivotAnchor1 :: !Position {-^ First anchor. -}
-           ,pivotAnchor2 :: !Position {-^ Second anchor. -}}
+  | Pivot2 {pivotAnchor1 :: !Position' {-^ First anchor. -}
+           ,pivotAnchor2 :: !Position' {-^ Second anchor. -}}
     deriving (Eq, Ord, Show)
 
 instance ConstraintType Pivot where
@@ -196,8 +196,8 @@ instance ConstraintType Pivot where
 -- | A groove joint attaches a point on the second body
 --   to a groove in the first one.
 data Groove = Groove {
-      groovePoints :: !(Position,Position) {-^ Groove, in first body's coordinates. -}
-     ,groovePivot  :: !Position            {-^ Pivot, in second body's coordinates. -}}
+      groovePoints :: !(Position',Position') {-^ Groove, in first body's coordinates. -}
+     ,groovePivot  :: !Position'            {-^ Pivot, in second body's coordinates. -}}
     deriving (Eq, Ord, Show)
 
 instance ConstraintType Groove where
@@ -226,8 +226,8 @@ instance ConstraintType Gear where
 -- | A simple damped spring.  Generally this constraint
 --   should be used instead of @applyDampedSpring@.
 data DampedSpring = DampedSpring {
-      dampedAnchor1    :: !Position {-^ First anchor. -}
-     ,dampedAnchor2    :: !Position {-^ Second anchor. -}
+      dampedAnchor1    :: !Position' {-^ First anchor. -}
+     ,dampedAnchor2    :: !Position' {-^ Second anchor. -}
      ,dampedRestLength :: !Distance {-^ Rest length. -}
      ,dampedStiffness  :: !CpFloat  {-^ Stiffness. -}
      ,dampedDamping    :: !Damping  {-^ Damping. -}}

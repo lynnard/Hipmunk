@@ -264,10 +264,10 @@ isFirstContact = do
     return (arbState == #{const cpArbiterStateFirstColl})
 
 -- | The normal vector of the collision.
-normal :: NotSeparate t => Callback t Vector
+normal :: NotSeparate t => Callback t Vector'
 normal = arbVecFunc wrArbiterGetNormal
 
-arbVecFunc :: (ArbiterPtr -> VectorPtr -> IO ()) -> Callback t Vector
+arbVecFunc :: (ArbiterPtr -> VectorPtr -> IO ()) -> Callback t Vector'
 arbVecFunc func = do
   arb_ptr <- arbiterPtr
   liftIO $ alloca $ \v_ptr -> do
@@ -278,9 +278,9 @@ foreign import ccall unsafe "wrapper.h"
     wrArbiterGetNormal :: ArbiterPtr -> VectorPtr -> IO ()
 
 -- | Points where the collision occured.
-points :: NotSeparate t => Callback t [Position]
+points :: NotSeparate t => Callback t [Position']
 points = do
-  let go :: [Position] -> Int -> ContactPtr -> IO [Position]
+  let go :: [Position'] -> Int -> ContactPtr -> IO [Position']
       go acc 0 _ = return acc
       go acc i p = do v <- #{peek cpContact, p} p
                       go (v:acc) (i-1) (p `advancePtr` negate 1)
@@ -294,7 +294,7 @@ points = do
 
 -- | The total impulse that was applied to resolve the collision.
 -- Returns incorrect results if elastic iterations are being used.
-totalImpulse :: NotSeparate t => Callback (PostStep t) Vector
+totalImpulse :: NotSeparate t => Callback (PostStep t) Vector'
 totalImpulse = arbVecFunc wrArbiterTotalImpulse
 
 foreign import ccall unsafe "wrapper.h"
@@ -303,7 +303,7 @@ foreign import ccall unsafe "wrapper.h"
 -- | The total impulse with friction that was applied to resolve
 -- the collision.  Returns incorrect results if elastic
 -- iterations are being used.
-totalImpulseWithFriction :: NotSeparate t => Callback (PostStep t) Vector
+totalImpulseWithFriction :: NotSeparate t => Callback (PostStep t) Vector'
 totalImpulseWithFriction = arbVecFunc wrArbiterTotalImpulseWithFriction
 
 foreign import ccall unsafe "wrapper.h"
