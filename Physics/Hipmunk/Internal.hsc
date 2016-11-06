@@ -20,7 +20,23 @@ module Physics.Hipmunk.Internal
      Body(..),
      unB,
 
+     Geometry(Circle, LineSegment, Polygon),
+     Geometry',
+     circleRadius,
+     lineStart,
+     lineEnd,
+     lineThickness,
+     polyVertices,
+     ofSameType,
+     ShapeAttributes(ShapeAttributes),
+     ShapeAttributes',
      shapeBody,
+     shapeGeometry,
+     shapeOffset,
+     shapeMass,
+     shapeCategoryMask,
+     shapeCollisionMask,
+
      ShapePtr,
      Shape(..),
      unS,
@@ -98,20 +114,66 @@ instance Ord Body where
 --   Note that to have any effect, a 'Shape' must also be
 --   added to a 'Space', even if the body was already added.
 
+-- | There are three types of shapes that can be attached
+--   to bodies:
+data Geometry a =
+    -- | A circle is the fastest collision type. It also
+    --   rolls smoothly.
+    Circle {_circleRadius :: !a}
+
+    -- | A line segment is meant to be used as a static
+    --   shape. (It can be used with moving bodies, however
+    --   two line segments never generate collisions between
+    --   each other.)
+  | LineSegment {_lineStart     :: !(Position a),
+                 _lineEnd       :: !(Position a),
+                 _lineThickness :: !a}
+
+    -- | Polygons are the slowest of all shapes but
+    --   the most flexible. The list of vertices must form
+    --   a convex hull with clockwise winding.
+    --   Note that if you want a non-convex polygon you may
+    --   add several convex polygons to the body.
+  | Polygon {_polyVertices :: ![Position a]}
+    deriving (Eq, Ord, Show)
+
+makeLenses ''Geometry
+
+type Geometry' = Geometry CpFloat
+
+ofSameType :: Geometry a -> Geometry a -> Bool
+ofSameType (Circle _) (Circle _) = True
+ofSameType (LineSegment _ _ _) (LineSegment _ _ _) = True
+ofSameType (Polygon _) (Polygon _) = True
+ofSameType _ _ = False
+
+instance Functor Geometry where
+    fmap f (Circle a) = Circle (f a)
+    fmap f (LineSegment start end thick) = LineSegment (f <$> start) (f <$> end) (f thick)
+    fmap f (Polygon verts) = Polygon (fmap f <$> verts)
+
+-- TODO: parameterize over double or float?
+data ShapeAttributes a = ShapeAttributes
+    { _shapeBody :: !Body
+    , _shapeGeometry :: !(Geometry a)
+    , _shapeOffset :: !(Position a)
+    , _shapeMass :: !a
+    , _shapeCategoryMask :: !Word64
+    , _shapeCollisionMask :: !Word64
+    } deriving (Eq, Ord)
+
+makeLenses ''ShapeAttributes
+
+type ShapeAttributes' = ShapeAttributes CpFloat
 
 data Shape = S
     { foreignShape :: !(ForeignPtr Shape)
-    , _shapeBody :: !Body
-    , _shToShapeDefinition :: !ShapeDefinition'
+    , shapeDefRef :: !(IORef ShapeAttributes')
     }
 
 makeLenses ''Shape
 
 type ShapePtr = Ptr Shape
-
-instance HasShapeDefinition Shape CpFloat where
-    shapeDefinition = shToShapeDefinition
-
 
 -- Note also that we have to maintain a reference to the
 -- 'Body' to avoid garbage collection in the case that
@@ -125,13 +187,13 @@ instance HasShapeDefinition Shape CpFloat where
 -- own reference the the shape.
 
 unS :: Shape -> ForeignPtr Shape
-unS (S s _ _) = s
+unS (S s _) = s
 
 instance Eq Shape where
-    S s1 _ _ == S s2 _ _ = s1 == s2
+    S s1 _ == S s2 _ = s1 == s2
 
 instance Ord Shape where
-    S s1 _ _ `compare` S s2 _ _ = s1 `compare` s2
+    S s1 _ `compare` S s2 _ = s1 `compare` s2
 
 
 
@@ -236,6 +298,8 @@ class Entity a where
     spaceRemove :: Space -> a -> IO ()
     -- | Internal function.  Retrive the pointer of this entity.
     entityPtr :: a -> ForeignPtr a
+    -- | Whether the entity is currently in space
+    inSpace :: a -> IO Bool
 
 
 -- | Arbiters are used within callbacks.  We don't expose them to

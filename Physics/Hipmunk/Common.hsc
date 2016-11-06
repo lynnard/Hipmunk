@@ -61,15 +61,6 @@ module Physics.Hipmunk.Common
 
      -- * Shape
      Mass,
-     ShapeType(Circle, LineSegment, Polygon),
-     circleRadius,
-     lineStart,
-     lineEnd,
-     lineThickness,
-     polyVertices,
-     HasShapeDefinition(..),
-     ShapeDefinition(ShapeDefinition),
-     ShapeDefinition',
 
      -- * Global variables
      -- $global_vars
@@ -103,11 +94,9 @@ module Physics.Hipmunk.Common
     )
     where
 
-import Data.Default
 import Foreign hiding (rotate)
 import Linear
 import Linear.Affine (Point(..))
-import Control.Lens
 -- import Foreign.C.Types (CInt)
 #include "wrapper.h"
 
@@ -203,56 +192,3 @@ instance {-# OVERLAPPING #-} Storable Vector' where
       #{poke cpVect, y} ptr y
 
 type Mass = CpFloat
-
--- | There are three types of shapes that can be attached
---   to bodies:
-data ShapeType a =
-    -- | A circle is the fastest collision type. It also
-    --   rolls smoothly.
-    Circle {_circleRadius :: !a}
-
-    -- | A line segment is meant to be used as a static
-    --   shape. (It can be used with moving bodies, however
-    --   two line segments never generate collisions between
-    --   each other.)
-  | LineSegment {_lineStart     :: !(Position a),
-                 _lineEnd       :: !(Position a),
-                 _lineThickness :: !a}
-
-    -- | Polygons are the slowest of all shapes but
-    --   the most flexible. The list of vertices must form
-    --   a convex hull with clockwise winding.
-    --   Note that if you want a non-convex polygon you may
-    --   add several convex polygons to the body.
-  | Polygon {_polyVertices :: ![Position a]}
-    deriving (Eq, Ord, Show)
-
-makeLenses ''ShapeType
-
-instance Functor ShapeType where
-    fmap f (Circle a) = Circle (f a)
-    fmap f (LineSegment start end thick) = LineSegment (f <$> start) (f <$> end) (f thick)
-    fmap f (Polygon verts) = Polygon (fmap f <$> verts)
-
--- TODO: parameterize over double or float?
-data ShapeDefinition a = ShapeDefinition
-    { _shapeType :: !(ShapeType a)
-    , _shapeOffset :: !(Position a)
-    , _shapeMass :: !a
-    , _shapeCategoryMask :: !Word64
-    , _shapeCollisionMask :: !Word64
-    } deriving (Eq, Ord, Show)
-
-makeClassy ''ShapeDefinition
-
-type ShapeDefinition' = ShapeDefinition CpFloat
-
-instance (Num a, Fractional a) => Default (ShapeDefinition a) where
-    def = ShapeDefinition
-        { _shapeType = LineSegment 0 0 0
-        , _shapeOffset = 0
-        , _shapeMass = 1/0
-        , _shapeCategoryMask = 0
-        -- mask that allows it to collide with everything else
-        , _shapeCollisionMask = maxBound
-        }

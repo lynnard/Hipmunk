@@ -219,6 +219,7 @@ instance Entity Body where
     spaceAdd    = spaceAddHelper    unB cpSpaceAddBody ReB
     spaceRemove = spaceRemoveHelper unB cpSpaceRemoveBody
     entityPtr   = unB
+    inSpace b  = withForeignPtr (unB b) $ fmap (/= nullPtr) . #{peek cpBody, space}
 foreign import ccall unsafe "wrapper.h"
     cpSpaceAddBody :: SpacePtr -> BodyPtr -> IO ()
 foreign import ccall unsafe "wrapper.h"
@@ -228,6 +229,7 @@ instance Entity Shape where
     spaceAdd    = spaceAddHelper    unS cpSpaceAddShape ReS
     spaceRemove = spaceRemoveHelper unS cpSpaceRemoveShape
     entityPtr   = unS
+    inSpace s   = withForeignPtr (unS s) $ fmap (/= nullPtr) . #{peek cpShape, space}
 foreign import ccall unsafe "wrapper.h"
     cpSpaceAddShape :: SpacePtr -> ShapePtr -> IO ()
 foreign import ccall {- !!! -} safe {- !!! -} "wrapper.h"
@@ -238,6 +240,7 @@ instance Entity (Constraint a) where
     spaceAdd    = spaceAddHelper    unC cpSpaceAddConstraint (ReC . forgetC)
     spaceRemove = spaceRemoveHelper unC cpSpaceRemoveConstraint
     entityPtr   = castForeignPtr . unC
+    inSpace c   = withForeignPtr (unC c) $ fmap (/= nullPtr) . #{peek cpConstraint, space}
 foreign import ccall unsafe "wrapper.h"
     cpSpaceAddConstraint :: SpacePtr -> ConstraintPtr -> IO ()
 foreign import ccall unsafe "wrapper.h"
@@ -260,6 +263,7 @@ instance Entity StaticShape where
     spaceAdd    = spaceAddHelper    (unS . unStatic) cpSpaceAddStaticShape (ReS . unStatic)
     spaceRemove = spaceRemoveHelper (unS . unStatic) cpSpaceRemoveStaticShape
     entityPtr   = castForeignPtr . unS . unStatic
+    inSpace     = inSpace . unStatic
 foreign import ccall unsafe "wrapper.h"
     cpSpaceAddStaticShape :: SpacePtr -> ShapePtr -> IO ()
 foreign import ccall {- !!! -} safe {- !!! -} "wrapper.h"

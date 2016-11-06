@@ -20,10 +20,10 @@ module Physics.Hipmunk.Body
      -- * Static properties
      -- ** Basic
      -- *** Mass
-     mass,
+     totalMass,
      -- *** Moment of inertia
      Moment,
-     moment,
+     totalMoment,
 
      -- ** Linear components of motion
      -- *** Position
@@ -47,8 +47,6 @@ module Physics.Hipmunk.Body
      Torque,
      torque,
 
-     inSpace,
-
      -- * Dynamic properties
      slew,
      updateVelocity,
@@ -57,6 +55,7 @@ module Physics.Hipmunk.Body
      applyForce,
      applyOnlyForce,
      applyImpulse,
+     recomputeTotalMassAndMoment,
 
      -- * Utilities
      localToWorld,
@@ -66,12 +65,16 @@ module Physics.Hipmunk.Body
 
 import Linear hiding (angle)
 import Linear.Affine (Point(..))
+import Data.IORef
 import Data.StateVar
 import Foreign hiding (rotate, new)
 #include "wrapper.h"
 
+import Control.Lens
+
 import Physics.Hipmunk.Common
 import Physics.Hipmunk.Internal
+import Physics.Hipmunk.Shape
 
 -- | @newBody mass inertia@ creates a new 'Body' with
 --   the given mass and moment of inertia.
@@ -89,8 +92,8 @@ foreign import ccall unsafe "wrapper.h"
 
 
 
-mass :: Body -> StateVar Mass
-mass (B b) = makeStateVar getter setter
+totalMass :: Body -> StateVar Mass
+totalMass (B b) = makeStateVar getter setter
     where
       getter = withForeignPtr b #{peek cpBody, m}
       setter = withForeignPtr b . flip cpBodySetMass
@@ -101,8 +104,8 @@ foreign import ccall unsafe "wrapper.h"
 
 type Moment = CpFloat
 
-moment :: Body -> StateVar Moment
-moment (B b) = makeStateVar getter setter
+totalMoment :: Body -> StateVar Moment
+totalMoment (B b) = makeStateVar getter setter
     where
       getter = withForeignPtr b #{peek cpBody, i}
       setter = withForeignPtr b . flip cpBodySetMoment
@@ -184,11 +187,6 @@ torque (B b) = makeStateVar getter setter
       getter = withForeignPtr b #{peek cpBody, t}
       setter = withForeignPtr b . flip #{poke cpBody, t}
 
-
-inSpace :: Body -> IO Bool
-inSpace (B b) = do
-    spacePtr <- withForeignPtr b #{peek cpBody, space}
-    return $ spacePtr /= nullPtr
 
 -- | @slew b newpos dt@ changes the body @b@'s velocity
 --   so that it reaches @newpos@ in @dt@ time.
@@ -280,6 +278,26 @@ applyImpulse (B b) j (P r) =
 foreign import ccall unsafe "wrapper.h"
     wrBodyApplyImpulse :: BodyPtr -> VectorPtr -> VectorPtr -> IO ()
 
+-- | Recompute the total mass and moment from the shapes and apply the values
+recomputeTotalMassAndMoment :: Space -> Body -> IO ()
+recomputeTotalMassAndMoment sp body@(B b) =
+  withForeignPtr b $ \b_ptr -> do
+    let go acc@(mass, mmt) ptr
+          | ptr == nullPtr = return acc
+          | otherwise = do
+            -- retrieve the data for the current shape
+            maybeShape <- retrieveShape sp ptr
+            case maybeShape of
+              Just (S _ ref) -> do
+                def <- readIORef ref
+                let m = def^.shapeMass
+                go ( mass+m
+                   , mmt+momentForShape m (def^.shapeGeometry) (def^.shapeOffset)
+                   ) =<< #{peek cpShape, next} ptr
+              _ -> fail "Physics.Hipmunk.Space: couldn't retrieve a shape definition"
+    (tmass, tmmt) <- go (0, 0) =<< #{peek cpBody, shapeList} b_ptr
+    totalMass body $= tmass
+    totalMoment body $= tmmt
 
 -- | For a vector @p@ in body @b@'s coordinates,
 --   @localToWorld b p@ returns the corresponding vector
