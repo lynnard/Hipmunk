@@ -19,6 +19,23 @@ module Physics.Hipmunk.Shape
      newShape,
 
      -- * Properties
+     -- re-export
+     ShapeAttributes(ShapeAttributes),
+     ShapeAttributes',
+     shapeBody,
+     shapeGeometry,
+     shapeOffset,
+     shapeMass,
+     shapeCategoryMask,
+     shapeCollisionMask,
+     Geometry(..),
+     circleRadius,
+     lineStart,
+     lineEnd,
+     lineThickness,
+     polyVertices,
+     ofSameType,
+
      shapeAttributes,
      mass,
      offset,
@@ -139,7 +156,6 @@ shapeAttributes (S _ ref) = makeStateVar getter setter
       getter = readIORef ref
       setter = writeIORef ref
 
--- TODO: recompute shape and mass on the body?
 mass :: Shape -> StateVar Mass
 mass (S _ ref) = makeStateVar getter setter
   where

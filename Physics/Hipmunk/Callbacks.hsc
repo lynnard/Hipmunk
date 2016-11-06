@@ -365,7 +365,7 @@ unsafePostStep (SP sp _ callbacks) e cb = do
   cb_ptr <- makeChipmunkPostStepCB f
   withForeignPtr sp $ \sp_ptr ->
     withForeignPtr (entityPtr e) $ \e_ptr ->
-      cpSpaceAddPostStepCallback sp_ptr cb_ptr (castPtr e_ptr) nullPtr
+      cpSpaceAddPostStepCallback sp_ptr cb_ptr e_ptr nullPtr
   let cb_ptr' = castFunPtr cb_ptr
   modifyIORef callbacks $ \cbs -> cbs {cbsPostStep = cb_ptr' : cbsPostStep cbs}
 

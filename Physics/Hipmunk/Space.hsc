@@ -21,7 +21,7 @@ module Physics.Hipmunk.Space
      Space,
      newSpace,
      freeSpace,
-     Entity(spaceAdd, spaceRemove),
+     Entity(..),
      StaticShape(..),
 
      -- * Properties
@@ -218,7 +218,7 @@ modifyIORefStrict var f = do
 instance Entity Body where
     spaceAdd    = spaceAddHelper    unB cpSpaceAddBody ReB
     spaceRemove = spaceRemoveHelper unB cpSpaceRemoveBody
-    entityPtr   = unB
+    entityPtr   = castForeignPtr . unB
     inSpace b  = withForeignPtr (unB b) $ fmap (/= nullPtr) . #{peek cpBody, space}
 foreign import ccall unsafe "wrapper.h"
     cpSpaceAddBody :: SpacePtr -> BodyPtr -> IO ()
@@ -228,7 +228,7 @@ foreign import ccall unsafe "wrapper.h"
 instance Entity Shape where
     spaceAdd    = spaceAddHelper    unS cpSpaceAddShape ReS
     spaceRemove = spaceRemoveHelper unS cpSpaceRemoveShape
-    entityPtr   = unS
+    entityPtr   = castForeignPtr . unS
     inSpace s   = withForeignPtr (unS s) $ fmap (/= nullPtr) . #{peek cpShape, space}
 foreign import ccall unsafe "wrapper.h"
     cpSpaceAddShape :: SpacePtr -> ShapePtr -> IO ()

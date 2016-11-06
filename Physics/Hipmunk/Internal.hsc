@@ -297,7 +297,7 @@ class Entity a where
     --   an entity that wasn't added.
     spaceRemove :: Space -> a -> IO ()
     -- | Internal function.  Retrive the pointer of this entity.
-    entityPtr :: a -> ForeignPtr a
+    entityPtr :: a -> ForeignPtr ()
     -- | Whether the entity is currently in space
     inSpace :: a -> IO Bool
 
