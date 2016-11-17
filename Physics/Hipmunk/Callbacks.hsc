@@ -235,7 +235,8 @@ arbiterPtr = ceArbiter <$> env
 
 
 -- | Shapes involved in this collision.
-shapes :: Callback t (Shape, Shape)
+-- XXX: hacked so that we could proceed if shapes return Nothing
+shapes :: Callback t (Maybe (Shape, Shape))
 shapes = do
   arb_ptr <- arbiterPtr
   spce    <- space
@@ -247,9 +248,9 @@ shapes = do
     maybeshapeB  <- retrieveShape spce shB_ptr
     case (maybeshapeA, maybeshapeB) of
       (Just shapeA, Just shapeB) -> if swapped
-                                       then return (shapeB, shapeA)
-                                       else return (shapeA, shapeB)
-      (_, _) -> fail "Physics.Hipmunk.Callbacks: expected shapes but got nothing!"
+                                       then return $ Just (shapeB, shapeA)
+                                       else return $ Just (shapeA, shapeB)
+      (_, _) -> return Nothing
 
 -- | Space from where these shapes come from.
 space :: Callback t Space

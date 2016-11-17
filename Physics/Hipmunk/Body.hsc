@@ -296,8 +296,13 @@ recomputeTotalMassAndMoment sp body@(B b) =
                    ) =<< #{peek cpShape, next} ptr
               _ -> fail "Physics.Hipmunk.Space: couldn't retrieve a shape definition"
     (tmass, tmmt) <- go (0, 0) =<< #{peek cpBody, shapeList} b_ptr
-    totalMass body $= tmass
-    totalMoment body $= tmmt
+    let inf = 1/0
+        tmass' | tmass == 0 = inf
+               | otherwise = tmass
+        tmmt'  | tmmt == 0 = inf
+               | otherwise = tmmt
+    totalMass body $= tmass'
+    totalMoment body $= tmmt'
 
 -- | For a vector @p@ in body @b@'s coordinates,
 --   @localToWorld b p@ returns the corresponding vector
