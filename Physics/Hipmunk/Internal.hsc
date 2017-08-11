@@ -1,6 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ExistentialQuantification #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Physics/Hipmunk/Internal.hsc
@@ -137,7 +137,45 @@ data Geometry a =
   | Polygon {_polyVertices :: ![Position a]}
     deriving (Eq, Ord, Show)
 
-makeLenses ''Geometry
+-- expansion of makeLenses ''Geometry
+circleRadius :: forall a_ajlf. Traversal' (Geometry a_ajlf) a_ajlf
+circleRadius f_alPa (Circle x1_alPb)
+  = fmap (\ y1_alPc -> Circle y1_alPc) (f_alPa x1_alPb)
+circleRadius _ (LineSegment x1_alPd x2_alPe x3_alPf)
+  = pure (LineSegment x1_alPd x2_alPe x3_alPf)
+circleRadius _ (Polygon x1_alPg) = pure (Polygon x1_alPg)
+{-# INLINE circleRadius #-}
+lineEnd ::
+  forall a_ajlf. Traversal' (Geometry a_ajlf) (Position a_ajlf)
+lineEnd _ (Circle x1_alPh) = pure (Circle x1_alPh)
+lineEnd f_alPi (LineSegment x1_alPj x2_alPk x3_alPl)
+  = fmap
+      (\ y1_alPm -> LineSegment x1_alPj y1_alPm x3_alPl) (f_alPi x2_alPk)
+lineEnd _ (Polygon x1_alPn) = pure (Polygon x1_alPn)
+{-# INLINE lineEnd #-}
+lineStart ::
+  forall a_ajlf. Traversal' (Geometry a_ajlf) (Position a_ajlf)
+lineStart _ (Circle x1_alPo) = pure (Circle x1_alPo)
+lineStart f_alPp (LineSegment x1_alPq x2_alPr x3_alPs)
+  = fmap
+      (\ y1_alPt -> LineSegment y1_alPt x2_alPr x3_alPs) (f_alPp x1_alPq)
+lineStart _ (Polygon x1_alPu) = pure (Polygon x1_alPu)
+{-# INLINE lineStart #-}
+lineThickness :: forall a_ajlf. Traversal' (Geometry a_ajlf) a_ajlf
+lineThickness _ (Circle x1_alPv) = pure (Circle x1_alPv)
+lineThickness f_alPw (LineSegment x1_alPx x2_alPy x3_alPz)
+  = fmap
+      (\ y1_alPA -> LineSegment x1_alPx x2_alPy y1_alPA) (f_alPw x3_alPz)
+lineThickness _ (Polygon x1_alPB) = pure (Polygon x1_alPB)
+{-# INLINE lineThickness #-}
+polyVertices ::
+  forall a_ajlf. Traversal' (Geometry a_ajlf) [Position a_ajlf]
+polyVertices _ (Circle x1_alPC) = pure (Circle x1_alPC)
+polyVertices _ (LineSegment x1_alPD x2_alPE x3_alPF)
+  = pure (LineSegment x1_alPD x2_alPE x3_alPF)
+polyVertices f_alPG (Polygon x1_alPH)
+  = fmap (\ y1_alPI -> Polygon y1_alPI) (f_alPG x1_alPH)
+{-# INLINE polyVertices #-}
 
 type Geometry' = Geometry CpFloat
 
@@ -162,7 +200,65 @@ data ShapeAttributes a = ShapeAttributes
     , _shapeCollisionMask :: !Word64
     } deriving (Eq, Ord)
 
-makeLenses ''ShapeAttributes
+-- expansion of makeLenses ''ShapeAttributes
+shapeBody :: forall a_alPY. Lens' (ShapeAttributes a_alPY) Body
+shapeBody
+  f_amek
+  (ShapeAttributes x1_amel x2_amem x3_amen x4_ameo x5_amep x6_ameq)
+  = fmap
+      (\ y1_amer
+          -> ShapeAttributes y1_amer x2_amem x3_amen x4_ameo x5_amep x6_ameq)
+      (f_amek x1_amel)
+{-# INLINE shapeBody #-}
+shapeCategoryMask ::
+  forall a_alPY. Lens' (ShapeAttributes a_alPY) Word64
+shapeCategoryMask
+  f_ames
+  (ShapeAttributes x1_amet x2_ameu x3_amev x4_amew x5_amex x6_amey)
+  = fmap
+      (\ y1_amez
+          -> ShapeAttributes x1_amet x2_ameu x3_amev x4_amew y1_amez x6_amey)
+      (f_ames x5_amex)
+{-# INLINE shapeCategoryMask #-}
+shapeCollisionMask ::
+  forall a_alPY. Lens' (ShapeAttributes a_alPY) Word64
+shapeCollisionMask
+  f_ameA
+  (ShapeAttributes x1_ameB x2_ameC x3_ameD x4_ameE x5_ameF x6_ameG)
+  = fmap
+      (\ y1_ameH
+          -> ShapeAttributes x1_ameB x2_ameC x3_ameD x4_ameE x5_ameF y1_ameH)
+      (f_ameA x6_ameG)
+{-# INLINE shapeCollisionMask #-}
+shapeGeometry ::
+  forall a_alPY. Lens' (ShapeAttributes a_alPY) (Geometry a_alPY)
+shapeGeometry
+  f_ameI
+  (ShapeAttributes x1_ameJ x2_ameK x3_ameL x4_ameM x5_ameN x6_ameO)
+  = fmap
+      (\ y1_ameP
+          -> ShapeAttributes x1_ameJ y1_ameP x3_ameL x4_ameM x5_ameN x6_ameO)
+      (f_ameI x2_ameK)
+{-# INLINE shapeGeometry #-}
+shapeMass :: forall a_alPY. Lens' (ShapeAttributes a_alPY) a_alPY
+shapeMass
+  f_ameQ
+  (ShapeAttributes x1_ameR x2_ameS x3_ameT x4_ameU x5_ameV x6_ameW)
+  = fmap
+      (\ y1_ameX
+          -> ShapeAttributes x1_ameR x2_ameS x3_ameT y1_ameX x5_ameV x6_ameW)
+      (f_ameQ x4_ameU)
+{-# INLINE shapeMass #-}
+shapeOffset ::
+  forall a_alPY. Lens' (ShapeAttributes a_alPY) (Position a_alPY)
+shapeOffset
+  f_ameY
+  (ShapeAttributes x1_ameZ x2_amf0 x3_amf1 x4_amf2 x5_amf3 x6_amf4)
+  = fmap
+      (\ y1_amf5
+          -> ShapeAttributes x1_ameZ x2_amf0 y1_amf5 x4_amf2 x5_amf3 x6_amf4)
+      (f_ameY x3_amf1)
+{-# INLINE shapeOffset #-}
 
 type ShapeAttributes' = ShapeAttributes CpFloat
 
@@ -170,8 +266,6 @@ data Shape = S
     { foreignShape :: !(ForeignPtr Shape)
     , shapeDefRef :: !(IORef ShapeAttributes')
     }
-
-makeLenses ''Shape
 
 type ShapePtr = Ptr Shape
 
